@@ -1,0 +1,97 @@
+# TASKFLOW — Docker Compose (doc §9-§11, §19, HU-13)
+#
+# Servicios del documento:
+#   frontend | backend | worker | mongoserver | redisserver
+#
+# Comunicación por NOMBRES DE SERVICIO, nunca localhost (doc §10):
+#   backend → mongoserver:27017 | redisserver:6379
+#   worker  → mongoserver:27017 | redisserver:6379 | backend:3000
+#
+# Puertos publicados (diferentes a los internos, doc §10) — documentados en backend/README.md:
+#   frontend: 8080 → 80      backend: 3001 → 3000
+#   mongoserver: 27018 → 27017    redisserver: 6380 → 6379
+
+services:
+  mongoserver:
+    image: mongo:7
+    container_name: taskflow-mongoserver
+    volumes:
+      - mongo-data:/data/db           # Persistencia (doc §11, regla 8)
+    ports:
+      - "27018:27017"                 # Anfitrión 27018 → contenedor 27017
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [taskflow]
+
+  redisserver:
+    image: redis:7-alpine
+    container_name: taskflow-redisserver
+    ports:
+      - "6380:6379"                   # Anfitrión 6380 → contenedor 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [taskflow]
+
+  backend:
+    build: ./backend
+    container_name: taskflow-backend
+    environment:
+      PORT: "3000"
+      MONGODB_URI: mongodb://mongoserver:27017/taskflow
+      REDIS_URL: redis://redisserver:6379
+      CORS_ORIGIN: "http://localhost:8080,http://127.0.0.1:8080"
+    ports:
+      - "3001:3000"                   # Anfitrión 3001 → contenedor 3000
+    depends_on:
+      mongoserver:
+        condition: service_healthy
+      redisserver:
+        condition: service_healthy
+    networks: [taskflow]
+
+  # Worker independiente (doc regla 6): imagen propia, sin exposición HTTP
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: taskflow-worker
+    environment:
+      MONGODB_URI: mongodb://mongoserver:27017/taskflow
+      REDIS_URL: redis://redisserver:6379
+      BACKEND_URL_PARA_WORKER: http://backend:3000
+      WORKER_INTERVALO_MS: "500"
+    depends_on:
+      mongoserver:
+        condition: service_healthy
+      redisserver:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    # El worker no sirve HTTP; desactivar el healthcheck heredado de la imagen del backend
+    healthcheck:
+      disable: true
+    networks: [taskflow]
+
+  frontend:
+    build: ./frontend
+    container_name: taskflow-frontend
+    ports:
+      - "8080:80"                     # Anfitrión 8080 → contenedor 80
+    depends_on:
+      backend:
+        condition: service_started
+    networks: [taskflow]
+
+volumes:
+  mongo-data:
+
+networks:
+  taskflow:
+    driver: bridge

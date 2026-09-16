@@ -1,0 +1,28 @@
+{
+  "name": "taskflow-backend",
+  "version": "1.0.0",
+  "description": "TASKFLOW - API REST + Socket.IO (Node.js + Express) con MongoDB, Redis (caché y cola) y Worker independiente",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "worker": "node src/worker/index.js",
+    "worker:dev": "nodemon src/worker/index.js",
+    "seed": "node src/scripts/seed.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.5.1",
+    "socket.io": "^4.7.5",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
