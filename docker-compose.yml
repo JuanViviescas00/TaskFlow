@@ -58,9 +58,7 @@ services:
 
   # Worker independiente (doc regla 6): imagen propia, sin exposición HTTP
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
+    build: ./worker
     container_name: taskflow-worker
     environment:
       MONGODB_URI: mongodb://mongoserver:27017/taskflow

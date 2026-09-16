@@ -22,7 +22,9 @@ app.get('/health', (_req, res) => {
   res.json({ estado: 'ok', servicio: 'taskflow-backend' });
 });
 
+// Rutas de la API (soporta tanto /api/solicitudes como /solicitudes según doc §5)
 app.use('/api', rutas);
+app.use('/', rutas);
 
 // 404 controlado para rutas desconocidas
 app.use((_req, res) => {

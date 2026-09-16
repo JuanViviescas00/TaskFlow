@@ -1,31 +1,21 @@
-'use strict';
+﻿'use strict';
 
 require('dotenv').config();
 
-const { conectarMongo, desconectarMongo } = require('../config/mongo');
-const { crearClienteRedis } = require('../config/redis');
-const queue = require('../services/queue.service');
-const cache = require('../services/cache.service');
-const { registrarRelevoWorker } = require('../sockets/index');
+const { conectarMongo, desconectarMongo } = require('./config/mongo');
+const { crearClienteRedis } = require('./config/redis');
+const queue = require('./services/queue.service');
+const cache = require('./services/cache.service');
 const { io: ClientIO } = require('socket.io-client');
-const { EVENTOS_SOCKET, EVENTOS_WORKER_A_BACKEND } = require('../utils/constantes');
-
-// WORKER independiente (doc §8 y taller §14):
-// 1. Espera solicitudes en la cola Redis
-// 2. Obtiene el id y consulta la solicitud en MongoDB
-// 3. Cambia el estado a PROCESANDO
-// 4. Identifica la categoría y aplica la regla de respuesta
-// 5. Genera y guarda la respuesta en MongoDB
-// 6. Cambia el estado a RESPONDIDA
-// Ante cualquier error: estado ERROR + mensajeError, sin detener el Worker (HU-11).
-
-const config = require('../config/env');
+const { EVENTOS_SOCKET, ESTADOS } = require('./utils/constantes');
+const { generarRespuesta } = require('./utils/reglasRespuesta');
+const Solicitud = require('./models/Solicitud');
+const config = require('./config/env');
 
 const backendUrl = config.backendUrlParaWorker;
 let socketBackend = null;
 
-// Conexión Socket.IO al backend para notificar en tiempo real (doc §21.5).
-// El backend retransmite estos eventos al navegador.
+// Conexión Socket.IO hacia el backend para notificaciones en vivo
 function conectarBackend() {
   socketBackend = ClientIO(backendUrl, {
     reconnection: true,
@@ -35,7 +25,6 @@ function conectarBackend() {
 
   socketBackend.on('connect', () => {
     console.log(`[worker] Conectado al backend por Socket.IO: ${backendUrl}`);
-    // avisa al backend (una sola vez) que relevará los eventos de este worker
     socketBackend.emit('worker:suscribir');
   });
 
@@ -56,12 +45,19 @@ function notificar(evento, datos) {
   }
 }
 
-async function procesarSolicitud(idSolicitud) {
-  const Solicitud = require('../models/Solicitud');
-  const { generarRespuesta } = require('../utils/reglasRespuesta');
-  const { ESTADOS } = require('../utils/constantes');
-  const service = require('../services/solicitud.service');
+async function actualizarEstado(id, estado, camposExtra = {}) {
+  const solicitud = await Solicitud.findByIdAndUpdate(
+    id,
+    { estado, ...camposExtra },
+    { new: true }
+  );
+  if (solicitud) {
+    await cache.invalidarSolicitudes();
+  }
+  return solicitud;
+}
 
+async function procesarSolicitud(idSolicitud) {
   console.log(`[worker] Procesando solicitud ${idSolicitud}`);
 
   const solicitud = await Solicitud.findById(idSolicitud);
@@ -74,48 +70,52 @@ async function procesarSolicitud(idSolicitud) {
     return;
   }
 
-  // Cambiar estado a PROCESANDO
-  await service.actualizarEstado(idSolicitud, ESTADOS.PROCESANDO);
-  notificar(
-    EVENTOS_SOCKET.SOLICITUD_PROCESANDO,
-    solicitudConEstado(solicitud, ESTADOS.PROCESANDO)
-  );
+  // 1. Cambiar estado a PROCESANDO
+  const enProceso = await actualizarEstado(idSolicitud, ESTADOS.PROCESANDO);
+  notificar(EVENTOS_SOCKET.SOLICITUD_PROCESANDO, enProceso.toJSON());
 
   try {
-    // Pequeña espera para que el cambio de estado sea visible en la demo
+    // Pausa pedagógica para que el cambio de estado se aprecie en vivo
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Identificar categoría → aplicar regla → generar respuesta
+    // Simulación de error controlado para la Prueba Obligatoria #7 del taller
+    if (
+      (solicitud.titulo && solicitud.titulo.toUpperCase().includes('[ERROR]')) ||
+      (solicitud.descripcion && solicitud.descripcion.toUpperCase().includes('[ERROR]'))
+    ) {
+      throw new Error('Fallo provocado para demostración pedagógica (Prueba #7 del taller).');
+    }
+
+    // 2. Identificar categoría y generar respuesta según reglas
     const respuesta = generarRespuesta(solicitud.categoria);
 
-    // Guardar respuesta en MongoDB y pasar a RESPONDIDA
-    const actualizada = await service.actualizarEstado(idSolicitud, ESTADOS.RESPONDIDA, {
+    // 3. Guardar en MongoDB y pasar a RESPONDIDA
+    const actualizada = await actualizarEstado(idSolicitud, ESTADOS.RESPONDIDA, {
       respuesta,
       fechaProcesamiento: new Date(),
       mensajeError: null,
     });
 
     notificar(EVENTOS_SOCKET.SOLICITUD_RESPONDIDA, actualizada.toJSON());
-    console.log(`[worker] Solicitud ${idSolicitud} RESPONDIDA`);
+    console.log(`[worker] Solicitud ${idSolicitud} RESPONDIDA con éxito`);
   } catch (err) {
     console.error(`[worker] Error procesando ${idSolicitud}: ${err.message}`);
-    const conError = await service
-      .actualizarEstado(idSolicitud, ESTADOS.ERROR, {
-        mensajeError: `No fue posible procesar la solicitud: ${err.message}`,
-      })
-      .catch(() => null);
+    const conError = await actualizarEstado(idSolicitud, ESTADOS.ERROR, {
+      mensajeError: `No fue posible procesar la solicitud: ${err.message}`,
+      fechaProcesamiento: new Date(),
+    }).catch(() => null);
+
     if (conError) {
       notificar(EVENTOS_SOCKET.SOLICITUD_ERROR, conError.toJSON());
     }
   }
 }
 
-function solicitudConEstado(solicitud, estado) {
-  return { ...solicitud.toJSON(), estado };
-}
-
 async function main() {
-  console.log('[worker] Iniciando TASKFLOW Worker...');
+  console.log('[worker] ==========================================');
+  console.log('[worker] Iniciando TASKFLOW Worker independiente...');
+  console.log('[worker] ==========================================');
+
   await conectarMongo();
   const redis = crearClienteRedis('worker');
   await redis.ping();
@@ -124,14 +124,14 @@ async function main() {
   let apagando = false;
   let procesadas = 0;
 
-  // Latido periódico para que el Monitor muestre al worker en línea (HU-09, HU-16)
+  // Latido para que el monitor detecte al Worker en línea
   const latido = setInterval(() => {
     if (socketBackend && socketBackend.connected) {
       socketBackend.emit('worker:heartbeat');
     }
   }, 5000);
 
-  // Bucle principal: consume la cola de forma continua
+  // Bucle de consumo continuo de la cola Redis
   while (!apagando) {
     try {
       const idSolicitud = await queue.desencolar(1);
@@ -140,7 +140,6 @@ async function main() {
         procesadas += 1;
         notificar(EVENTOS_SOCKET.COLA_ACTUALIZADA, { enCola: await queue.tamano() });
       } else {
-        // sin solicitudes: latido para el monitor
         if (procesadas > 0 && procesadas % 10 === 0) {
           notificar(EVENTOS_SOCKET.MONITOR_ACTUALIZADO, { worker: 'activo', procesadas });
         }
