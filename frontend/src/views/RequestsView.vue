@@ -6,11 +6,13 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
 import RequestTable from '../components/requests/RequestTable.vue'
 import CacheBadge from '../components/common/CacheBadge.vue'
+import CacheModal from '../components/common/CacheModal.vue'
 import { CATEGORIAS, ESTADOS, PRIORIDADES } from '../utils/format'
 
 const store = useRequestStore()
 const toast = useToast()
 
+const modalCacheVisible = ref(false)
 const debounceTimer = ref(null)
 
 // Suscripción reactiva con Socket.IO (HU-16)
@@ -71,7 +73,7 @@ onUnmounted(() => {
 
       <div class="header-actions">
         <!-- Indicador de Caché Redis vs MongoDB (HU-08) -->
-        <CacheBadge :cache="store.listCache" />
+        <CacheBadge :cache="store.listCache" :clickable="true" @click="modalCacheVisible = true" />
 
         <button
           type="button"
@@ -152,6 +154,15 @@ onUnmounted(() => {
       :solicitudes="store.solicitudes"
       :loading="store.cargando"
       @eliminar="eliminar"
+    />
+
+    <!-- Inspector Modal de Caché -->
+    <CacheModal
+      v-model:visible="modalCacheVisible"
+      :cache="store.listCache"
+      tipo="Listado de Solicitudes"
+      cacheKey="solicitudes:listado"
+      :onEjecutarPrueba="() => store.cargarSolicitudes()"
     />
   </div>
 </template>

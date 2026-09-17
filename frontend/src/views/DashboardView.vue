@@ -6,12 +6,14 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
 import RequestTable from '../components/requests/RequestTable.vue'
 import CacheBadge from '../components/common/CacheBadge.vue'
+import CacheModal from '../components/common/CacheModal.vue'
 
 const store = useRequestStore()
 const toast = useToast()
 
 const cargando = ref(true)
 const error = ref('')
+const modalCacheVisible = ref(false)
 
 const eventos = {
   'solicitud-creada': (s) => {
@@ -63,7 +65,7 @@ onUnmounted(() => {
       </div>
 
       <div class="dash-actions">
-        <CacheBadge :cache="store.statsCache" />
+        <CacheBadge :cache="store.statsCache" :clickable="true" @click="modalCacheVisible = true" />
         <RouterLink to="/solicitudes/nueva" class="btn-primary">
           ➕ Nueva Solicitud
         </RouterLink>
@@ -150,6 +152,15 @@ onUnmounted(() => {
         @eliminar="(s) => store.remover(s.id)"
       />
     </div>
+
+    <!-- Inspector Modal de Caché -->
+    <CacheModal
+      v-model:visible="modalCacheVisible"
+      :cache="store.statsCache"
+      tipo="Estadísticas Globales"
+      cacheKey="estadisticas:resumen"
+      :onEjecutarPrueba="() => store.cargarEstadisticas()"
+    />
   </div>
 </template>
 

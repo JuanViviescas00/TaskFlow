@@ -7,6 +7,7 @@ import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
 import EstadoBadge from '../components/EstadoBadge.vue'
 import CacheBadge from '../components/common/CacheBadge.vue'
+import CacheModal from '../components/common/CacheModal.vue'
 import ResponsePanel from '../components/requests/ResponsePanel.vue'
 import { formatDate } from '../utils/format'
 
@@ -17,20 +18,34 @@ const toast = useToast()
 const solicitud = ref(null)
 const cacheHeader = ref('MISS')
 const cargando = ref(true)
+const actualizandoCache = ref(false)
 const error = ref('')
+const modalCacheVisible = ref(false)
 
-async function cargarDetalle() {
-  cargando.value = true
+async function cargarDetalle(mostrarSpinner = true) {
+  if (mostrarSpinner) cargando.value = true
+  else actualizandoCache.value = true
   try {
     const data = await store.cargarDetalle(route.params.id)
     solicitud.value = data
     cacheHeader.value = store.detailCache
     error.value = ''
+    return { cache: cacheHeader.value }
   } catch (e) {
     error.value = store.error || 'No se pudo cargar la solicitud.'
+    throw e
   } finally {
-    cargando.value = false
+    if (mostrarSpinner) cargando.value = false
+    else actualizandoCache.value = false
   }
+}
+
+function abrirModalCache() {
+  modalCacheVisible.value = true
+}
+
+async function testearCache() {
+  abrirModalCache()
 }
 
 const eventos = {
@@ -74,15 +89,15 @@ onMounted(cargarDetalle)
 
       <div class="header-actions">
         <!-- Indicador de Caché Redis vs Mongo (HU-08) -->
-        <CacheBadge :cache="cacheHeader" />
+        <CacheBadge :cache="cacheHeader" :clickable="true" @click="abrirModalCache" />
         <button
           type="button"
           class="btn-cache"
-          title="Consultar nuevamente para probar CACHE HIT / CACHE MISS"
-          :disabled="cargando"
-          @click="cargarDetalle"
+          title="Abrir inspector para probar CACHE HIT / CACHE MISS"
+          :disabled="cargando || actualizandoCache"
+          @click="abrirModalCache"
         >
-          <span :class="{ 'spin-icon': cargando }">🔄</span>
+          <span :class="{ 'spin-icon': actualizandoCache }">⚡</span>
           <span>Probar Caché</span>
         </button>
         <RouterLink to="/solicitudes" class="btn-back">
@@ -159,6 +174,15 @@ onMounted(cargarDetalle)
         :fecha-procesamiento="solicitud.fechaProcesamiento"
       />
     </template>
+
+    <!-- Modal Inspector de Caché Redis & Mongo (HU-08) -->
+    <CacheModal
+      v-model:visible="modalCacheVisible"
+      :cache="cacheHeader"
+      tipo="Detalle de Solicitud"
+      :cacheKey="`solicitud:${route.params.id}`"
+      :onEjecutarPrueba="() => cargarDetalle(false)"
+    />
   </div>
 </template>
 
