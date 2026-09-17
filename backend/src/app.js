@@ -13,6 +13,7 @@ const app = express();
 app.use(
   cors({
     origin: config.corsOrigin,
+    exposedHeaders: ['X-Cache'],
   })
 );
 app.use(express.json({ limit: '1mb' }));
