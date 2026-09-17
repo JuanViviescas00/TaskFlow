@@ -1,6 +1,6 @@
 <script setup>
-// Listado de solicitudes (doc §15.3, HU-02, HU-08, HU-16)
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+// Pantalla de solicitudes inspirada en la arquitectura visual de dos columnas de la referencia
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRequestStore } from '../store/requestStore'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
@@ -13,7 +13,7 @@ const toast = useToast()
 
 const debounceTimer = ref(null)
 
-// Suscripción a eventos Socket.IO para recarga reactiva (HU-16)
+// Suscripción reactiva con Socket.IO (HU-16)
 const eventos = {
   'solicitud-creada': () => store.cargarSolicitudes(),
   'solicitud-encolada': () => store.cargarSolicitudes(),
@@ -42,7 +42,7 @@ async function eliminar(s) {
   if (!confirm(`¿Estás seguro de eliminar la solicitud "${s.titulo}"?`)) return
   try {
     await store.remover(s.id)
-    toast.success(`Solicitud #${s.id ? s.id.slice(-6) : ''} eliminada`, 'Operación exitosa')
+    toast.success(`Solicitud eliminada correctamente`, 'Operación exitosa')
   } catch {
     toast.error('No se pudo eliminar la solicitud.', 'Error')
   }
@@ -61,153 +61,299 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="requests-page">
-    <div class="page-top-bar">
-      <div>
-        <h1 class="page-heading">Mis Solicitudes</h1>
-        <p class="page-subheading">
-          Total de solicitudes: <strong>{{ store.total }}</strong>
-        </p>
-      </div>
-
-      <div class="top-actions">
-        <!-- Indicador de Caché en tiempo real para la prueba de HU-08 -->
-        <CacheBadge :cache="store.listCache" />
-
-        <button
-          type="button"
-          class="btn-refresh"
-          title="Refrescar datos y verificar caché"
-          :disabled="store.cargando"
-          @click="store.cargarSolicitudes()"
-        >
-          <span :class="{ 'spin-icon': store.cargando }">🔄</span>
-          <span>Actualizar</span>
-        </button>
-
-        <RouterLink to="/solicitudes/nueva" class="btn-primary-action">
-          ➕ Nueva solicitud
-        </RouterLink>
-      </div>
+  <div class="page-container">
+    <!-- Barra decorativa superior interna estilo tarjeta de referencia -->
+    <div class="inner-banner-bar">
+      <span>CATÁLOGO DE SOLICITUDES & TRÁMITES</span>
     </div>
 
-    <!-- Barra de Filtros -->
-    <div class="filters-card">
-      <div class="search-field">
-        <span class="search-icon">🔍</span>
-        <input
-          v-model="store.filtros.q"
-          type="search"
-          placeholder="Buscar por título o descripción..."
-          class="search-input"
-          @input="onFilterChange"
-        />
+    <!-- Contenedor principal estilo superficie clara de referencia -->
+    <div class="main-surface-card">
+      <!-- Encabezado con título grande e insignias -->
+      <div class="surface-header">
+        <div class="title-group">
+          <h2 class="main-page-title">Mis Solicitudes</h2>
+          <p class="main-page-sub">Consulta el estado en tiempo real y las respuestas generadas por el Worker</p>
+        </div>
+
+        <div class="surface-badges">
+          <span class="count-pill">{{ store.total }} REGISTRADAS</span>
+          <CacheBadge :cache="store.listCache" />
+          <button
+            type="button"
+            class="btn-refresh-icon"
+            title="Refrescar lista y probar caché"
+            :disabled="store.cargando"
+            @click="store.cargarSolicitudes()"
+          >
+            <span :class="{ 'spin-icon': store.cargando }">🔄</span>
+          </button>
+        </div>
       </div>
 
-      <div class="select-filters">
-        <select
-          v-model="store.filtros.estado"
-          class="filter-select"
-          @change="onFilterChange"
-        >
-          <option value="">Todos los estados</option>
-          <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
-        </select>
+      <!-- Layout de dos columnas: Filtros a la izquierda, contenido a la derecha -->
+      <div class="content-layout">
+        <!-- Columna de Filtros estilo referencia -->
+        <aside class="filters-sidebar">
+          <div class="filters-box">
+            <h3 class="filters-heading">FILTROS</h3>
 
-        <select
-          v-model="store.filtros.categoria"
-          class="filter-select"
-          @change="onFilterChange"
-        >
-          <option value="">Todas las categorías</option>
-          <option v-for="c in CATEGORIAS" :key="c" :value="c">{{ c }}</option>
-        </select>
+            <div class="filter-field">
+              <label class="filter-label">Buscar Solicitud</label>
+              <input
+                v-model="store.filtros.q"
+                type="search"
+                placeholder="Título o descripción..."
+                class="filter-input"
+                @input="onFilterChange"
+              />
+            </div>
 
-        <select
-          v-model="store.filtros.prioridad"
-          class="filter-select"
-          @change="onFilterChange"
-        >
-          <option value="">Todas las prioridades</option>
-          <option v-for="p in PRIORIDADES" :key="p" :value="p">{{ p }}</option>
-        </select>
+            <div class="filter-field">
+              <label class="filter-label">Categoría</label>
+              <select
+                v-model="store.filtros.categoria"
+                class="filter-select"
+                @change="onFilterChange"
+              >
+                <option value="">Todas las categorías</option>
+                <option v-for="c in CATEGORIAS" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
 
-        <button
-          type="button"
-          class="btn-clear"
-          title="Limpiar todos los filtros"
-          @click="limpiarFiltros"
-        >
-          Limpiar
-        </button>
+            <div class="filter-field">
+              <label class="filter-label">Estado de Procesamiento</label>
+              <select
+                v-model="store.filtros.estado"
+                class="filter-select"
+                @change="onFilterChange"
+              >
+                <option value="">Todos los estados</option>
+                <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
+              </select>
+            </div>
+
+            <div class="filter-field">
+              <label class="filter-label">Prioridad</label>
+              <select
+                v-model="store.filtros.prioridad"
+                class="filter-select"
+                @change="onFilterChange"
+              >
+                <option value="">Todas las prioridades</option>
+                <option v-for="p in PRIORIDADES" :key="p" :value="p">{{ p }}</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              class="btn-clear-filters"
+              @click="limpiarFiltros"
+            >
+              Limpiar filtros
+            </button>
+          </div>
+        </aside>
+
+        <!-- Columna de la tabla de solicitudes -->
+        <main class="table-area">
+          <div v-if="store.error" class="alerta error mb-4">
+            <span class="alerta-icono">⚠️</span>
+            <span>{{ store.error }}</span>
+          </div>
+
+          <RequestTable
+            :solicitudes="store.solicitudes"
+            :loading="store.cargando"
+            @eliminar="eliminar"
+          />
+        </main>
       </div>
     </div>
-
-    <div v-if="store.error" class="alerta error">
-      <span class="alerta-icono">⚠️</span>
-      <span>{{ store.error }}</span>
-    </div>
-
-    <!-- Tabla de Solicitudes -->
-    <RequestTable
-      :solicitudes="store.solicitudes"
-      :loading="store.cargando"
-      @eliminar="eliminar"
-    />
   </div>
 </template>
 
 <style scoped>
-.requests-page {
+.page-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 0;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.page-top-bar {
+/* Barra superior decorativa como en la referencia */
+.inner-banner-bar {
+  background: #0d3830;
+  color: #86efac;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 10px 24px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Superficie principal */
+.main-surface-card {
+  background: #f4f7f6; /* Fondo suave claro como en la referencia */
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 14px;
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+}
+
+.surface-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
+  margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.page-heading {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #0f172a;
+.main-page-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #0d3830; /* Tono oscuro profundo elegante */
+  letter-spacing: -0.5px;
 }
 
-.page-subheading {
-  font-size: 0.88rem;
+.main-page-sub {
+  font-size: 0.85rem;
   color: #64748b;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
-.top-actions {
+.surface-badges {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-.btn-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: white;
-  color: #334155;
+/* Pastilla de contador estilo '5 DISPONIBLES' */
+.count-pill {
+  background: #e2ece9;
+  color: #0d3830;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 6px 14px;
+  border-radius: 20px;
   border: 1px solid #cbd5e1;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 500;
+}
+
+.btn-refresh-icon {
+  background: white;
+  border: 1px solid #cbd5e1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: all 0.15s;
 }
-.btn-refresh:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
+.btn-refresh-icon:hover {
+  background: #f1f5f9;
+}
+
+/* Layout de dos columnas */
+.content-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Panel de Filtros estilo referencia */
+.filters-sidebar {
+  width: 100%;
+}
+
+.filters-box {
+  background: #e4eee9; /* Tinte suave verdoso/grisáceo como en la referencia */
+  border: 1px solid #d1ded8;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.filters-heading {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #0d3830;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.filter-input,
+.filter-select {
+  width: 100%;
+  padding: 9px 12px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  color: #0f172a;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: inherit;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  border-color: #0d3830;
+  box-shadow: 0 0 0 3px rgba(13, 56, 48, 0.15);
+}
+
+.btn-clear-filters {
+  background: transparent;
+  border: 1.5px solid #0d3830;
+  color: #0d3830;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.btn-clear-filters:hover {
+  background: #0d3830;
+  color: #ffffff;
+}
+
+/* Área de Tabla */
+.table-area {
+  min-width: 0;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
 }
 
 .spin-icon {
@@ -215,106 +361,13 @@ onUnmounted(() => {
   animation: spin 0.8s linear infinite;
 }
 
-.btn-primary-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #2563eb;
-  color: white;
-  text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-  transition: all 0.2s;
-}
-.btn-primary-action:hover {
-  background: #1d4ed8;
-}
-
-.filters-card {
-  background: white;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.search-field {
-  position: relative;
-  width: 100%;
-}
-
-.search-icon {
-  position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.95rem;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.search-input {
-  width: 100%;
-  padding: 10px 14px 10px 40px;
-  font-size: 0.92rem;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  background: #f8fafc;
-}
-
-.search-input:focus {
-  background: white;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-.select-filters {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-select {
-  flex: 1;
-  min-width: 140px;
-  padding: 8px 12px;
-  font-size: 0.88rem;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
-  background: white;
-  color: #334155;
-  outline: none;
-}
-
-.filter-select:focus {
-  border-color: #2563eb;
-}
-
-.btn-clear {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #64748b;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-clear:hover {
-  background: #e2e8f0;
-  color: #1e293b;
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@media (max-width: 960px) {
+  .content-layout {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
