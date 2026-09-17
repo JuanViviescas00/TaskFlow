@@ -56,7 +56,7 @@ onUnmounted(() => {
 .layout-wrapper {
   display: flex;
   min-height: 100vh;
-  background: #edf2ef;
+  background: #f8fafc;
 }
 
 .layout-main {

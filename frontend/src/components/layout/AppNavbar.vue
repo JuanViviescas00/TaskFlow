@@ -1,10 +1,10 @@
 <script setup>
-// Barra superior elegante con banner oscuro inspirado en el diseño de referencia
+// Barra superior moderna y limpia (Navbar)
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRequestStore } from '../../store/requestStore'
 
-const props = defineProps({
+defineProps({
   connected: {
     type: Boolean,
     default: false,
@@ -18,69 +18,67 @@ const store = useRequestStore()
 const pageTitle = computed(() => {
   switch (route.name) {
     case 'dashboard':
-      return 'Panel de Control'
+      return 'Dashboard'
     case 'solicitudes':
       return 'Gestión de Solicitudes'
     case 'solicitud-nueva':
-      return 'Registro de Nueva Solicitud'
+      return 'Nueva Solicitud'
     case 'solicitud-detalle':
       return 'Detalle de Solicitud'
     case 'monitor':
-      return 'Monitor del Sistema & Worker'
+      return 'Monitor del Sistema'
     default:
-      return 'TaskFlow'
+      return 'TASKFLOW'
   }
 })
 </script>
 
 <template>
-  <header class="top-navbar">
+  <header class="navbar">
     <div class="navbar-left">
       <button
         type="button"
-        class="menu-toggle-btn"
+        class="btn-hamburger"
         @click="emit('toggle-sidebar')"
-        aria-label="Abrir menú de navegación"
+        aria-label="Abrir menú"
       >
-        <span class="hamburger-icon">☰</span>
+        <span>☰</span>
       </button>
 
-      <div class="header-titles">
-        <h1 class="main-title">{{ pageTitle }}</h1>
-      </div>
+      <h1 class="header-title">{{ pageTitle }}</h1>
     </div>
 
     <div class="navbar-right">
       <!-- Indicador activo de worker -->
       <div v-if="store.hayActividad" class="active-badge" title="Worker procesando cola Redis">
         <span class="pulse-dot"></span>
-        <span class="activity-text">Worker procesando</span>
+        <span class="activity-text">Worker activo</span>
       </div>
 
       <!-- Conexión Socket -->
-      <div class="socket-pill" :class="connected ? 'connected' : 'disconnected'">
-        <span class="socket-dot"></span>
-        <span class="socket-text">{{ connected ? 'Socket en línea' : 'Desconectado' }}</span>
+      <div class="connection-badge" :class="connected ? 'connected' : 'disconnected'">
+        <span class="conn-dot"></span>
+        <span class="conn-text">{{ connected ? 'En línea' : 'Desconectado' }}</span>
       </div>
 
       <!-- Botón de acción rápida -->
       <RouterLink
         v-if="route.path !== '/solicitudes/nueva'"
         to="/solicitudes/nueva"
-        class="btn-new-action"
+        class="btn-add"
       >
-        <span class="btn-icon">➕</span>
-        <span class="btn-label">Nueva Solicitud</span>
+        <span>+</span>
+        <span class="btn-text">Nueva Solicitud</span>
       </RouterLink>
     </div>
   </header>
 </template>
 
 <style scoped>
-.top-navbar {
-  height: 62px;
-  background: #0d3830; /* Verde oscuro elegante como el encabezado de referencia */
-  color: #ffffff;
+.navbar {
+  height: 60px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -88,45 +86,38 @@ const pageTitle = computed(() => {
   position: sticky;
   top: 0;
   z-index: 900;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .navbar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
-.menu-toggle-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  width: 36px;
-  height: 36px;
-  display: inline-flex;
+.btn-hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  font-size: 1.25rem;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.menu-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.main-title {
   font-size: 1.15rem;
+  color: #334155;
+  cursor: pointer;
+}
+
+.header-title {
+  font-size: 1.1rem;
   font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.2px;
+  color: #0f172a;
 }
 
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .active-badge {
@@ -134,11 +125,11 @@ const pageTitle = computed(() => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: rgba(250, 204, 21, 0.15);
-  border: 1px solid rgba(250, 204, 21, 0.3);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 20px;
   font-size: 0.76rem;
-  color: #fef08a;
+  color: #1d4ed8;
   font-weight: 600;
 }
 
@@ -146,80 +137,74 @@ const pageTitle = computed(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #facc15;
+  background: #2563eb;
   animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.7); }
-  70% { transform: scale(1.15); box-shadow: 0 0 0 6px rgba(250, 204, 21, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(250, 204, 21, 0); }
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
+  70% { transform: scale(1.15); box-shadow: 0 0 0 5px rgba(37, 99, 235, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 
-.socket-pill {
+.connection-badge {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   border-radius: 20px;
   font-size: 0.78rem;
   font-weight: 500;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
 }
 
-.socket-pill.connected {
-  color: #86efac;
+.connection-badge.connected {
+  color: #15803d;
 }
-.socket-pill.disconnected {
-  color: #fca5a5;
+.connection-badge.disconnected {
+  color: #b91c1c;
 }
 
-.socket-dot {
+.conn-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
 }
-.socket-pill.connected .socket-dot {
+.connection-badge.connected .conn-dot {
   background: #22c55e;
   box-shadow: 0 0 6px #22c55e;
 }
-.socket-pill.disconnected .socket-dot {
+.connection-badge.disconnected .conn-dot {
   background: #ef4444;
 }
 
-.btn-new-action {
+.btn-add {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: #22c55e;
-  color: #064e3b;
+  background: #2563eb;
+  color: #ffffff;
   text-decoration: none;
   font-size: 0.84rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 7px 14px;
   border-radius: 8px;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
 }
 
-.btn-new-action:hover {
-  background: #4ade80;
-  transform: translateY(-1px);
+.btn-add:hover {
+  background: #1d4ed8;
 }
 
-@media (max-width: 768px) {
-  .top-navbar {
-    padding: 0 16px;
-  }
-  .main-title {
-    font-size: 1rem;
-  }
-  .btn-label, .activity-text {
-    display: none;
-  }
-  .btn-new-action {
-    padding: 7px 10px;
-  }
+@media (max-width: 900px) {
+  .btn-hamburger { display: inline-flex; }
+  .navbar { padding: 0 16px; }
+}
+
+@media (max-width: 600px) {
+  .btn-text, .activity-text { display: none; }
+  .btn-add { padding: 7px 10px; }
 }
 </style>

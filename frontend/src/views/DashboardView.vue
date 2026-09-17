@@ -1,10 +1,9 @@
 <script setup>
-// Dashboard rediseñado con la estética moderna de tarjetas y superficies limpias
+// Dashboard limpio y moderno de TASKFLOW
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRequestStore } from '../store/requestStore'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
-import StatCard from '../components/StatCard.vue'
 import RequestTable from '../components/requests/RequestTable.vue'
 import CacheBadge from '../components/common/CacheBadge.vue'
 
@@ -17,7 +16,7 @@ const error = ref('')
 const eventos = {
   'solicitud-creada': (s) => {
     recargar()
-    toast.info(`Nueva solicitud registrada: "${s.titulo}"`, 'Dashboard')
+    toast.info(`Nueva solicitud: "${s.titulo}"`, 'Dashboard')
   },
   'solicitud-encolada': () => recargar(),
   'solicitud-procesando': () => recargar(),
@@ -55,225 +54,198 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="page-container">
-    <!-- Barra decorativa superior interna estilo tarjeta de referencia -->
-    <div class="inner-banner-bar">
-      <span>RESUMEN GENERAL DEL SISTEMA & FLUJO ASÍNCRONO</span>
+  <div class="dashboard-container">
+    <!-- Encabezado -->
+    <div class="dash-header">
+      <div>
+        <h2 class="dash-title">Panel de Control</h2>
+        <p class="dash-sub">Métricas en tiempo real y flujo de procesamiento</p>
+      </div>
+
+      <div class="dash-actions">
+        <CacheBadge :cache="store.statsCache" />
+        <RouterLink to="/solicitudes/nueva" class="btn-primary">
+          ➕ Nueva Solicitud
+        </RouterLink>
+      </div>
     </div>
 
-    <!-- Superficie principal -->
-    <div class="main-surface-card">
-      <div class="surface-header">
-        <div class="title-group">
-          <h2 class="main-page-title">Panel de Control</h2>
-          <p class="main-page-sub">Métricas en tiempo real, estado de la cola Redis y flujo de procesamiento</p>
-        </div>
+    <div v-if="error" class="alerta error mb-4">
+      <span class="alerta-icono">⚠️</span>
+      <span>{{ error }}</span>
+    </div>
 
-        <div class="surface-badges">
-          <span class="count-pill">{{ store.stats.total }} SOLICITUDES</span>
-          <CacheBadge :cache="store.statsCache" />
-          <RouterLink to="/solicitudes/nueva" class="btn-primary-action">
-            ➕ Nueva Solicitud
-          </RouterLink>
+    <!-- Banner si hay actividad de procesamiento -->
+    <div v-if="store.hayActividad" class="active-worker-card">
+      <span class="worker-pulse">⚡</span>
+      <div>
+        <strong>Worker Node.js en ejecución</strong>
+        <p>Procesando solicitudes asíncronamente desde la cola Redis. Los cambios se actualizan automáticamente.</p>
+      </div>
+    </div>
+
+    <!-- Tarjetas métricas modernas -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-total">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Solicitudes</span>
+          <span class="kpi-ico">📁</span>
         </div>
+        <span class="kpi-val">{{ store.stats.total }}</span>
+        <span class="kpi-desc">Registradas en MongoDB</span>
       </div>
 
-      <div v-if="error" class="alerta error mb-4">
-        <span class="alerta-icono">⚠️</span>
-        <span>{{ error }}</span>
+      <div class="kpi-card kpi-queue">
+        <div class="kpi-header">
+          <span class="kpi-title">En Cola (Redis)</span>
+          <span class="kpi-ico">⏳</span>
+        </div>
+        <span class="kpi-val">{{ store.stats.enCola }}</span>
+        <span class="kpi-desc">Esperando turno</span>
       </div>
 
-      <!-- Aviso de actividad del worker -->
-      <div v-if="store.hayActividad" class="worker-notice">
-        <div class="notice-icon">⚡</div>
-        <div class="notice-text">
-          <strong>Worker Node.js procesando activamente</strong>
-          <p>Hay solicitudes en cola o en ejecución. Las métricas se actualizan en vivo sin recargar.</p>
+      <div class="kpi-card kpi-process">
+        <div class="kpi-header">
+          <span class="kpi-title">En Proceso</span>
+          <span class="kpi-ico">⚙️</span>
         </div>
+        <span class="kpi-val">{{ store.stats.procesando }}</span>
+        <span class="kpi-desc">Worker ejecutando</span>
       </div>
 
-      <!-- Grid de indicadores (StatCards rediseñadas) -->
-      <div class="stats-grid">
-        <div class="stat-box total-box">
-          <span class="stat-num">{{ store.stats.total }}</span>
-          <span class="stat-name">Total Solicitudes</span>
-          <span class="stat-sub">Registradas en MongoDB</span>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-header">
+          <span class="kpi-title">Respondidas</span>
+          <span class="kpi-ico">✓</span>
         </div>
-
-        <div class="stat-box cola-box">
-          <span class="stat-num">{{ store.stats.enCola }}</span>
-          <span class="stat-name">En Cola (Redis)</span>
-          <span class="stat-sub">Esperando Worker</span>
-        </div>
-
-        <div class="stat-box proc-box">
-          <span class="stat-num">{{ store.stats.procesando }}</span>
-          <span class="stat-name">Procesando</span>
-          <span class="stat-sub">Worker evaluando reglas</span>
-        </div>
-
-        <div class="stat-box resp-box">
-          <span class="stat-num">{{ store.stats.respondidas }}</span>
-          <span class="stat-name">Respondidas</span>
-          <span class="stat-sub">Procesadas con éxito</span>
-        </div>
-
-        <div class="stat-box err-box">
-          <span class="stat-num">{{ store.stats.errores }}</span>
-          <span class="stat-name">Con Error</span>
-          <span class="stat-sub">Fallas controladas</span>
-        </div>
+        <span class="kpi-val">{{ store.stats.respondidas }}</span>
+        <span class="kpi-desc">Atendidas con éxito</span>
       </div>
 
-      <!-- Sección de Solicitudes Recientes -->
-      <div class="recent-section">
-        <div class="recent-header">
-          <div>
-            <h3 class="recent-title">Solicitudes Recientes</h3>
-            <p class="recent-sub">Últimos trámites ingresados al sistema</p>
-          </div>
-          <RouterLink to="/solicitudes" class="link-view-all">
-            Ver todas las solicitudes →
-          </RouterLink>
+      <div class="kpi-card kpi-error">
+        <div class="kpi-header">
+          <span class="kpi-title">Con Error</span>
+          <span class="kpi-ico">⚠️</span>
         </div>
-
-        <RequestTable
-          :solicitudes="store.solicitudes.slice(0, 5)"
-          :loading="cargando"
-          @eliminar="(s) => store.remover(s.id)"
-        />
+        <span class="kpi-val">{{ store.stats.errores }}</span>
+        <span class="kpi-desc">Fallas controladas</span>
       </div>
+    </div>
+
+    <!-- Tabla de Solicitudes Recientes -->
+    <div class="recent-card">
+      <div class="recent-header">
+        <div>
+          <h3 class="recent-title">Solicitudes Recientes</h3>
+          <p class="recent-sub">Últimos requerimientos registrados en el sistema</p>
+        </div>
+        <RouterLink to="/solicitudes" class="link-all">
+          Ver todas las solicitudes →
+        </RouterLink>
+      </div>
+
+      <RequestTable
+        :solicitudes="store.solicitudes.slice(0, 5)"
+        :loading="cargando"
+        @eliminar="(s) => store.remover(s.id)"
+      />
     </div>
   </div>
 </template>
 
 <style scoped>
-.page-container {
+.dashboard-container {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 22px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
-.inner-banner-bar {
-  background: #0d3830;
-  color: #86efac;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  padding: 10px 24px;
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
-}
-
-.main-surface-card {
-  background: #f4f7f6;
-  border-bottom-left-radius: 14px;
-  border-bottom-right-radius: 14px;
-  padding: 24px;
-  border: 1px solid #e2e8f0;
-  border-top: none;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.surface-header {
+.dash-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: 14px;
 }
 
-.main-page-title {
-  font-size: 1.85rem;
+.dash-title {
+  font-size: 1.45rem;
   font-weight: 800;
-  color: #0d3830;
-  letter-spacing: -0.5px;
+  color: #0f172a;
+  letter-spacing: -0.3px;
 }
 
-.main-page-sub {
-  font-size: 0.85rem;
+.dash-sub {
+  font-size: 0.84rem;
   color: #64748b;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
-.surface-badges {
+.dash-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
-.count-pill {
-  background: #e2ece9;
-  color: #0d3830;
-  font-size: 0.76rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid #cbd5e1;
-}
-
-.btn-primary-action {
-  background: #0d3830;
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #2563eb;
   color: #ffffff;
   text-decoration: none;
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 8px 16px;
   border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
   transition: all 0.15s;
-  box-shadow: 0 2px 6px rgba(13, 56, 48, 0.2);
 }
-.btn-primary-action:hover {
-  background: #14532d;
+.btn-primary:hover {
+  background: #1d4ed8;
 }
 
-.worker-notice {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+.active-worker-card {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   border-radius: 12px;
   padding: 14px 18px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
-.notice-icon {
-  font-size: 1.5rem;
-  color: #059669;
+.worker-pulse {
+  font-size: 1.4rem;
+  color: #2563eb;
 }
 
-.notice-text strong {
-  color: #065f46;
-  font-size: 0.92rem;
+.active-worker-card strong {
+  color: #1e40af;
+  font-size: 0.9rem;
 }
 
-.notice-text p {
-  color: #047857;
-  font-size: 0.82rem;
+.active-worker-card p {
+  color: #3b82f6;
+  font-size: 0.8rem;
   margin-top: 2px;
 }
 
-/* Grid de métricas con tarjetas redondeadas modernas */
-.stats-grid {
+/* KPIs modernos */
+.kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
-.stat-box {
+.kpi-card {
   background: #ffffff;
-  border-radius: 14px;
-  padding: 20px 18px;
-  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -281,49 +253,58 @@ onUnmounted(() => {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.stat-box:hover {
+.kpi-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
 }
 
-.stat-num {
-  font-size: 2.1rem;
-  font-weight: 900;
-  line-height: 1;
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.stat-name {
-  font-size: 0.84rem;
+.kpi-title {
+  font-size: 0.78rem;
   font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.kpi-ico {
+  font-size: 1.1rem;
+}
+
+.kpi-val {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
   margin-top: 4px;
 }
 
-.stat-sub {
+.kpi-desc {
   font-size: 0.72rem;
-  color: #64748b;
+  color: #94a3b8;
 }
 
-.total-box .stat-num { color: #0d3830; }
-.total-box .stat-name { color: #0d3830; }
-
-.cola-box .stat-num { color: #0284c7; }
-.cola-box .stat-name { color: #0369a1; }
-
-.proc-box .stat-num { color: #7c3aed; }
-.proc-box .stat-name { color: #6d28d9; }
-
-.resp-box .stat-num { color: #16a34a; }
-.resp-box .stat-name { color: #15803d; }
-
-.err-box .stat-num { color: #dc2626; }
-.err-box .stat-name { color: #b91c1c; }
+.kpi-total { border-top: 3px solid #2563eb; }
+.kpi-queue { border-top: 3px solid #0284c7; }
+.kpi-process { border-top: 3px solid #7c3aed; }
+.kpi-success { border-top: 3px solid #16a34a; }
+.kpi-error { border-top: 3px solid #dc2626; }
 
 /* Sección reciente */
-.recent-section {
+.recent-card {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-top: 8px;
+  gap: 16px;
 }
 
 .recent-header {
@@ -333,24 +314,24 @@ onUnmounted(() => {
 }
 
 .recent-title {
-  font-size: 1.2rem;
-  font-weight: 800;
-  color: #0d3830;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .recent-sub {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: #64748b;
   margin-top: 2px;
 }
 
-.link-view-all {
-  color: #0d3830;
-  font-size: 0.86rem;
-  font-weight: 700;
+.link-all {
+  color: #2563eb;
+  font-size: 0.84rem;
+  font-weight: 600;
   text-decoration: none;
 }
-.link-view-all:hover {
+.link-all:hover {
   text-decoration: underline;
 }
 

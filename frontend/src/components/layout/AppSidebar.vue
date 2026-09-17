@@ -1,7 +1,5 @@
 <script setup>
-// Barra lateral de navegación inspirada en el diseño moderno de referencia
-import { socket } from '../../plugins/socket'
-
+// Barra lateral moderna y profesional de TASKFLOW
 defineProps({
   isOpen: {
     type: Boolean,
@@ -22,7 +20,7 @@ function closeSidebar() {
 
 <template>
   <div>
-    <!-- Overlay móvil -->
+    <!-- Overlay para móvil -->
     <div
       v-if="isOpen"
       class="sidebar-backdrop"
@@ -30,16 +28,14 @@ function closeSidebar() {
     ></div>
 
     <aside class="sidebar" :class="{ 'sidebar-open': isOpen }">
-      <!-- Logo Superior -->
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <div class="logo-box">
-            <span class="logo-symbol">⚡</span>
-          </div>
-          <div class="logo-text">
-            <h2>TaskFlow</h2>
-            <span class="logo-sub">Gestión de Solicitudes</span>
-          </div>
+      <!-- Logo de la marca -->
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <span>⚡</span>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">TASKFLOW</span>
+          <span class="brand-tag">Gestión de Solicitudes</span>
         </div>
         <button
           type="button"
@@ -51,35 +47,40 @@ function closeSidebar() {
         </button>
       </div>
 
-      <!-- Sección Navegación -->
-      <div class="nav-section-title">NAVEGACIÓN</div>
-
+      <!-- Menú de Navegación -->
       <nav class="sidebar-nav">
-        <RouterLink to="/dashboard" class="nav-item" @click="closeSidebar">
-          <span class="nav-icon">📊</span>
-          <span class="nav-label">Dashboard</span>
+        <span class="nav-heading">MENÚ PRINCIPAL</span>
+
+        <RouterLink to="/dashboard" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">📊</span>
+          <span class="link-text">Dashboard</span>
         </RouterLink>
-        <RouterLink to="/solicitudes" class="nav-item" @click="closeSidebar">
-          <span class="nav-icon">📋</span>
-          <span class="nav-label">Mis Solicitudes</span>
+
+        <RouterLink to="/solicitudes" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">📋</span>
+          <span class="link-text">Solicitudes</span>
         </RouterLink>
-        <RouterLink to="/solicitudes/nueva" class="nav-item" @click="closeSidebar">
-          <span class="nav-icon">➕</span>
-          <span class="nav-label">Nueva Solicitud</span>
+
+        <RouterLink to="/solicitudes/nueva" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">➕</span>
+          <span class="link-text">Nueva Solicitud</span>
         </RouterLink>
-        <RouterLink to="/monitor" class="nav-item" @click="closeSidebar">
-          <span class="nav-icon">🖥️</span>
-          <span class="nav-label">Monitor del Sistema</span>
+
+        <span class="nav-heading" style="margin-top: 14px;">INFRAESTRUCTURA</span>
+
+        <RouterLink to="/monitor" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">🖥️</span>
+          <span class="link-text">Monitor & Worker</span>
         </RouterLink>
       </nav>
 
-      <!-- Pie de navegación -->
+      <!-- Pie de barra con estado del Socket -->
       <div class="sidebar-footer">
-        <div class="status-pill" :class="connected ? 'online' : 'offline'">
+        <div class="socket-status" :class="connected ? 'online' : 'offline'">
           <span class="status-dot"></span>
-          <span class="status-text">{{ connected ? 'Socket en línea' : 'Socket desconectado' }}</span>
+          <span>{{ connected ? 'Socket en línea' : 'Desconectado' }}</span>
         </div>
-        <div class="footer-info">SENA • Docker Compose Full Stack</div>
+        <span class="footer-version">v1.0.0 • Full Stack SENA</span>
       </div>
     </aside>
   </div>
@@ -90,192 +91,168 @@ function closeSidebar() {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(3px);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(2px);
   z-index: 990;
 }
 
 .sidebar {
-  width: 250px;
-  background: #ffffff;
-  border-right: 1px solid #e5e7eb;
+  width: 240px;
+  background: #0f172a; /* Slate 900 elegante de herramientas como Linear / Vercel */
+  color: #f8fafc;
   display: flex;
   flex-direction: column;
-  padding: 22px 16px;
+  padding: 20px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
   z-index: 1000;
+  border-right: 1px solid #1e293b;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.02);
 }
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #f1f5f9;
-  margin-bottom: 20px;
-}
-
-.sidebar-logo {
+.sidebar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 6px 8px 18px 8px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 16px;
 }
 
-.logo-box {
-  width: 38px;
-  height: 38px;
-  background: linear-gradient(135deg, #0d3830, #14532d);
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(13, 56, 48, 0.25);
-}
-
-.logo-symbol {
-  font-size: 1.25rem;
-  color: #86efac;
-}
-
-.logo-text h2 {
   font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-size: 1.05rem;
   font-weight: 800;
-  color: #0f2b24;
-  letter-spacing: -0.3px;
+  letter-spacing: 0.5px;
+  color: #ffffff;
   line-height: 1.1;
 }
 
-.logo-sub {
-  font-size: 0.72rem;
-  color: #64748b;
+.brand-tag {
+  font-size: 0.7rem;
+  color: #94a3b8;
   font-weight: 500;
 }
 
 .btn-close-mobile {
   display: none;
+  margin-left: auto;
   background: transparent;
   border: none;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 1.2rem;
   cursor: pointer;
-  padding: 4px;
-}
-
-.nav-section-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #64748b;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  padding-left: 10px;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
 }
 
-.nav-item {
+.nav-heading {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.8px;
+  padding: 8px 12px 4px 12px;
+}
+
+.nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  color: #334155;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #94a3b8;
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.15s ease;
 }
 
-.nav-item:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 
-/* Estado activo estilo píldora como en el diseño de referencia */
-.nav-item.router-link-active {
-  background: #dcfce7;
-  color: #14532d;
-  font-weight: 700;
+.nav-link.router-link-active {
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
-.nav-icon {
-  font-size: 1.1rem;
+.link-icon {
+  font-size: 1.05rem;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+  padding-top: 14px;
+  border-top: 1px solid #1e293b;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  padding-left: 6px;
 }
 
-.status-pill {
+.socket-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 20px;
+  gap: 7px;
   font-size: 0.78rem;
   font-weight: 600;
 }
 
-.status-pill.online {
-  background: #f0fdf4;
-  color: #15803d;
-  border: 1px solid #bbf7d0;
-}
-
-.status-pill.offline {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
+.socket-status.online { color: #4ade80; }
+.socket-status.offline { color: #f87171; }
 
 .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
 }
-
-.status-pill.online .status-dot {
+.socket-status.online .status-dot {
   background: #22c55e;
   box-shadow: 0 0 6px #22c55e;
 }
-
-.status-pill.offline .status-dot {
+.socket-status.offline .status-dot {
   background: #ef4444;
 }
 
-.footer-info {
+.footer-version {
   font-size: 0.68rem;
-  color: #94a3b8;
-  padding-left: 4px;
+  color: #64748b;
 }
 
 @media (max-width: 900px) {
-  .sidebar-backdrop {
-    display: block;
-  }
-  .btn-close-mobile {
-    display: block;
-  }
+  .sidebar-backdrop { display: block; }
+  .btn-close-mobile { display: block; }
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
     transform: translateX(-100%);
-    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.15);
+    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.3);
   }
   .sidebar.sidebar-open {
     transform: translateX(0);
