@@ -1,40 +1,53 @@
 <script setup>
-// Detalle de solicitud (doc §15.4, HU-03, HU-08, HU-16)
-import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+// Detalle de solicitud limpio y moderno
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useRequestStore } from '../store/requestStore'
 import { useSocket } from '../composables/useSocket'
 import { useToast } from '../composables/useToast'
 import EstadoBadge from '../components/EstadoBadge.vue'
 import CacheBadge from '../components/common/CacheBadge.vue'
+import CacheModal from '../components/common/CacheModal.vue'
 import ResponsePanel from '../components/requests/ResponsePanel.vue'
 import { formatDate } from '../utils/format'
 
 const route = useRoute()
-const router = useRouter()
 const store = useRequestStore()
 const toast = useToast()
 
 const solicitud = ref(null)
 const cacheHeader = ref('MISS')
 const cargando = ref(true)
+const actualizandoCache = ref(false)
 const error = ref('')
+const modalCacheVisible = ref(false)
 
-async function cargarDetalle() {
-  cargando.value = true
+async function cargarDetalle(mostrarSpinner = true) {
+  if (mostrarSpinner) cargando.value = true
+  else actualizandoCache.value = true
   try {
     const data = await store.cargarDetalle(route.params.id)
     solicitud.value = data
     cacheHeader.value = store.detailCache
     error.value = ''
+    return { cache: cacheHeader.value }
   } catch (e) {
     error.value = store.error || 'No se pudo cargar la solicitud.'
+    throw e
   } finally {
-    cargando.value = false
+    if (mostrarSpinner) cargando.value = false
+    else actualizandoCache.value = false
   }
 }
 
-// Eventos en tiempo real para reflejar cambios del Worker (HU-16)
+function abrirModalCache() {
+  modalCacheVisible.value = true
+}
+
+async function testearCache() {
+  abrirModalCache()
+}
+
 const eventos = {
   'solicitud-procesando': (s) => {
     if (s.id === route.params.id) {
@@ -61,34 +74,32 @@ onMounted(cargarDetalle)
 </script>
 
 <template>
-  <div class="detail-page">
-    <div class="page-top-bar">
+  <div class="detail-container">
+    <div class="page-header">
       <div>
         <div class="breadcrumb">
           <RouterLink to="/solicitudes">Solicitudes</RouterLink>
-          <span class="separator">/</span>
+          <span>/</span>
           <span>Detalle</span>
         </div>
-        <h1 class="page-heading">
-          Solicitud <span class="id-code">#{{ route.params.id ? route.params.id.slice(-6) : '' }}</span>
-        </h1>
+        <h2 class="page-title">
+          Solicitud <span class="id-mono">#{{ route.params.id ? route.params.id.slice(-6) : '' }}</span>
+        </h2>
       </div>
 
-      <div class="top-actions">
-        <!-- Indicador de Caché prominente para la evaluación del SENA (HU-08) -->
-        <CacheBadge :cache="cacheHeader" />
-
+      <div class="header-actions">
+        <!-- Indicador de Caché Redis vs Mongo (HU-08) -->
+        <CacheBadge :cache="cacheHeader" :clickable="true" @click="abrirModalCache" />
         <button
           type="button"
-          class="btn-refresh"
-          title="Consultar nuevamente para probar CACHE HIT / CACHE MISS"
-          :disabled="cargando"
-          @click="cargarDetalle"
+          class="btn-cache"
+          title="Abrir inspector para probar CACHE HIT / CACHE MISS"
+          :disabled="cargando || actualizandoCache"
+          @click="abrirModalCache"
         >
-          <span :class="{ 'spin-icon': cargando }">🔄</span>
+          <span :class="{ 'spin-icon': actualizandoCache }">⚡</span>
           <span>Probar Caché</span>
         </button>
-
         <RouterLink to="/solicitudes" class="btn-back">
           ← Volver
         </RouterLink>
@@ -107,63 +118,51 @@ onMounted(cargarDetalle)
 
     <template v-else-if="solicitud">
       <!-- Explicación pedagógica de la Caché (HU-08) -->
-      <div class="cache-explanation-card" :class="cacheHeader === 'HIT' ? 'hit' : 'miss'">
-        <span class="badge-icon">{{ cacheHeader === 'HIT' ? '⚡' : '💾' }}</span>
-        <div class="cache-info-text">
-          <strong>Resultado de la consulta: {{ cacheHeader === 'HIT' ? 'CACHE HIT' : 'CACHE MISS' }}</strong>
+      <div class="cache-callout" :class="cacheHeader === 'HIT' ? 'hit' : 'miss'">
+        <span class="callout-ico">{{ cacheHeader === 'HIT' ? '⚡' : '💾' }}</span>
+        <div>
+          <strong>Consulta atendida por: {{ cacheHeader === 'HIT' ? 'CACHE HIT (Redis)' : 'CACHE MISS (MongoDB)' }}</strong>
           <p v-if="cacheHeader === 'HIT'">
-            La información se recuperó velozmente desde <strong>Redis</strong> sin necesidad de realizar una consulta a MongoDB.
+            Se recuperó inmediatamente de la memoria RAM de <strong>Redis</strong> sin realizar consultas lentas a MongoDB.
           </p>
           <p v-else>
-            La información no estaba en la caché temporal de Redis; fue leída de la base de datos persistente <strong>MongoDB</strong> y ahora ha quedado guardada en Redis para consultas posteriores.
+            La información se leyó de la base de datos persistente <strong>MongoDB</strong> y quedó almacenada temporalmente en Redis.
           </p>
         </div>
       </div>
 
-      <!-- Ficha de Datos de la Solicitud -->
-      <div class="detail-card">
-        <div class="card-section header-section">
-          <div class="title-meta">
-            <h2>{{ solicitud.titulo }}</h2>
-            <p class="full-id">ID completo: <code>{{ solicitud.id }}</code></p>
+      <!-- Ficha de Datos -->
+      <div class="data-card">
+        <div class="card-header-row">
+          <div>
+            <h3 class="item-title">{{ solicitud.titulo }}</h3>
+            <span class="item-id">ID: <code>{{ solicitud.id }}</code></span>
           </div>
-          <div class="status-box">
-            <EstadoBadge :estado="solicitud.estado" />
+          <EstadoBadge :estado="solicitud.estado" />
+        </div>
+
+        <div class="fields-grid">
+          <div class="field-col">
+            <span class="lbl">Categoría</span>
+            <span class="val bold">{{ solicitud.categoria }}</span>
+          </div>
+          <div class="field-col">
+            <span class="lbl">Prioridad</span>
+            <span class="val">{{ solicitud.prioridad }}</span>
+          </div>
+          <div class="field-col">
+            <span class="lbl">Creada</span>
+            <span class="val">{{ formatDate(solicitud.fechaCreacion) }}</span>
+          </div>
+          <div class="field-col">
+            <span class="lbl">Procesada</span>
+            <span class="val">{{ solicitud.fechaProcesamiento ? formatDate(solicitud.fechaProcesamiento) : 'En espera' }}</span>
           </div>
         </div>
 
-        <div class="card-grid">
-          <div class="data-item">
-            <span class="data-label">Categoría</span>
-            <span class="data-value cat-value">{{ solicitud.categoria }}</span>
-          </div>
-
-          <div class="data-item">
-            <span class="data-label">Prioridad</span>
-            <span
-              class="data-value prio-value"
-              :class="'prio-' + (solicitud.prioridad ? solicitud.prioridad.toLowerCase() : 'media')"
-            >
-              {{ solicitud.prioridad }}
-            </span>
-          </div>
-
-          <div class="data-item">
-            <span class="data-label">Fecha de Creación</span>
-            <span class="data-value">{{ formatDate(solicitud.fechaCreacion) }}</span>
-          </div>
-
-          <div class="data-item">
-            <span class="data-label">Fecha de Procesamiento</span>
-            <span class="data-value">
-              {{ solicitud.fechaProcesamiento ? formatDate(solicitud.fechaProcesamiento) : 'Pendiente' }}
-            </span>
-          </div>
-        </div>
-
-        <div class="desc-section">
-          <span class="data-label">Descripción del Requerimiento</span>
-          <p class="desc-content">{{ solicitud.descripcion }}</p>
+        <div class="desc-box">
+          <span class="lbl">Descripción</span>
+          <p class="desc-text">{{ solicitud.descripcion }}</p>
         </div>
       </div>
 
@@ -175,241 +174,212 @@ onMounted(cargarDetalle)
         :fecha-procesamiento="solicitud.fechaProcesamiento"
       />
     </template>
+
+    <!-- Modal Inspector de Caché Redis & Mongo (HU-08) -->
+    <CacheModal
+      v-model:visible="modalCacheVisible"
+      :cache="cacheHeader"
+      tipo="Detalle de Solicitud"
+      :cacheKey="`solicitud:${route.params.id}`"
+      :onEjecutarPrueba="() => cargarDetalle(false)"
+    />
   </div>
 </template>
 
 <style scoped>
-.detail-page {
+.detail-container {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 960px;
+  gap: 18px;
+  max-width: 1100px;
   margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
 }
 
 .breadcrumb {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.84rem;
+  gap: 6px;
+  font-size: 0.8rem;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .breadcrumb a {
   color: #2563eb;
   text-decoration: none;
 }
-.breadcrumb a:hover {
-  text-decoration: underline;
-}
-.separator {
-  color: #cbd5e1;
-}
 
-.page-top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.page-heading {
-  font-size: 1.5rem;
-  font-weight: 700;
+.page-title {
+  font-size: 1.45rem;
+  font-weight: 800;
   color: #0f172a;
 }
 
-.id-code {
+.id-mono {
   color: #2563eb;
   font-family: monospace;
 }
 
-.top-actions {
+.header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
 }
 
-.btn-refresh {
+.btn-cache {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: white;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-cache:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn-back {
+  background: #ffffff;
   border: 1px solid #cbd5e1;
   color: #334155;
   padding: 8px 14px;
   border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-refresh:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-}
-
-.btn-back {
-  background: white;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: 0.84rem;
+  font-weight: 600;
   text-decoration: none;
 }
 
-.cache-explanation-card {
+.cache-callout {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 14px 18px;
+  gap: 12px;
+  padding: 12px 16px;
   border-radius: 10px;
   border: 1px solid;
-  font-size: 0.86rem;
+  font-size: 0.85rem;
 }
-
-.cache-explanation-card.hit {
+.cache-callout.hit {
   background: #f0fdf4;
   border-color: #bbf7d0;
   color: #166534;
 }
-
-.cache-explanation-card.miss {
-  background: #f8fafc;
+.cache-callout.miss {
+  background: #ffffff;
   border-color: #cbd5e1;
   color: #334155;
 }
 
-.badge-icon {
-  font-size: 1.4rem;
+.callout-ico {
+  font-size: 1.3rem;
   line-height: 1.2;
 }
 
-.cache-info-text strong {
-  display: block;
-  font-size: 0.92rem;
-  margin-bottom: 2px;
-}
-
-.cache-info-text p {
-  font-size: 0.82rem;
-  opacity: 0.9;
-  line-height: 1.4;
-}
-
-.detail-card {
-  background: white;
+.data-card {
+  background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   padding: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.header-section {
+.card-header-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
-  padding-bottom: 18px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #f1f5f9;
 }
 
-.title-meta h2 {
+.item-title {
   font-size: 1.25rem;
   font-weight: 700;
   color: #0f172a;
 }
 
-.full-id {
-  font-size: 0.78rem;
-  color: #94a3b8;
-  margin-top: 4px;
+.item-id {
+  font-size: 0.76rem;
+  color: #64748b;
+  margin-top: 2px;
+  display: block;
 }
-
-.full-id code {
+.item-id code {
   font-family: monospace;
   background: #f1f5f9;
-  padding: 2px 6px;
+  padding: 2px 4px;
   border-radius: 4px;
 }
 
-.card-grid {
+.fields-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 18px;
-  padding: 20px 0;
+  gap: 16px;
+  padding: 16px 0;
   border-bottom: 1px solid #f1f5f9;
 }
 
-.data-item {
+.field-col {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.data-label {
-  font-size: 0.78rem;
-  font-weight: 600;
+.lbl {
+  font-size: 0.72rem;
+  font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
 }
 
-.data-value {
-  font-size: 0.95rem;
-  color: #1e293b;
-  font-weight: 500;
+.val {
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+.val.bold { font-weight: 600; color: #2563eb; }
+
+.desc-box {
+  padding-top: 16px;
 }
 
-.cat-value {
-  color: #2563eb;
-  font-weight: 600;
-}
-
-.prio-value {
-  display: inline-block;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  width: fit-content;
-}
-.prio-alta { background: #fef2f2; color: #b91c1c; }
-.prio-media { background: #fffbeb; color: #b45309; }
-.prio-baja { background: #f0fdf4; color: #15803d; }
-
-.desc-section {
-  padding-top: 20px;
-}
-
-.desc-content {
-  margin-top: 8px;
-  font-size: 0.95rem;
-  line-height: 1.6;
+.desc-text {
+  margin-top: 6px;
+  font-size: 0.92rem;
   color: #334155;
+  line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .loading-box {
-  padding: 60px 0;
+  padding: 40px;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
   color: #64748b;
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border: 3px solid #e2e8f0;
   border-top-color: #2563eb;
   border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 10px auto;
+}
+
+.spin-icon {
+  display: inline-block;
   animation: spin 0.8s linear infinite;
 }
 

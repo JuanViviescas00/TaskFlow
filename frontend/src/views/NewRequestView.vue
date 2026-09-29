@@ -1,5 +1,5 @@
 <script setup>
-// Pantalla de nueva solicitud (doc §15.2, HU-01)
+// Pantalla de Nueva Solicitud limpia y moderna
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRequestStore } from '../store/requestStore'
@@ -25,21 +25,20 @@ async function onSubmit(payload) {
     const id = respuesta.solicitud?.id
     const estado = respuesta.solicitud?.estado || 'EN_COLA'
 
-    serverSuccess.value = `¡Solicitud creada con éxito! Estado: ${estado}. Se ha enviado a la cola Redis.`
-    toast.success(`Solicitud #${id ? id.slice(-6) : ''} registrada correctamente`, 'Éxito')
+    serverSuccess.value = `¡Solicitud registrada con éxito! Estado: ${estado}. Ha ingresado a la cola Redis.`
+    toast.success(`Solicitud #${id ? id.slice(-6) : ''} creada correctamente`, 'Éxito')
 
     if (formRef.value) {
       formRef.value.resetForm()
     }
 
-    // Redirección suave al listado
     setTimeout(() => {
       router.push('/solicitudes')
     }, 1500)
   } catch (e) {
     if (e.response?.data) {
       const { error, detalles } = e.response.data
-      serverError.value = error || 'Error al procesar la solicitud'
+      serverError.value = error || 'Error al registrar la solicitud'
       if (detalles && detalles.length > 0) {
         serverError.value += ': ' + detalles.join(', ')
       }
@@ -58,13 +57,11 @@ function onCancel() {
 </script>
 
 <template>
-  <div class="new-request-page">
-    <div class="page-top-bar">
+  <div class="new-req-container">
+    <div class="page-header">
       <div>
-        <h1 class="page-heading">Crear Nueva Solicitud</h1>
-        <p class="page-subheading">
-          Registra una petición para ser procesada asíncronamente por el Worker
-        </p>
+        <h2 class="page-title">Nueva Solicitud</h2>
+        <p class="page-sub">Registra una petición para ser procesada asíncronamente por el Worker</p>
       </div>
 
       <RouterLink to="/solicitudes" class="btn-back">
@@ -72,8 +69,9 @@ function onCancel() {
       </RouterLink>
     </div>
 
-    <div class="content-grid">
-      <div class="form-column">
+    <div class="grid-content">
+      <!-- Formulario -->
+      <div class="form-wrapper">
         <RequestForm
           ref="formRef"
           :loading="loading"
@@ -84,186 +82,122 @@ function onCancel() {
         />
       </div>
 
-      <div class="info-column">
-        <div class="info-card">
-          <div class="info-card-header">
-            <span class="info-icon">💡</span>
-            <h4>¿Cómo funciona TASKFLOW?</h4>
-          </div>
-          <ul class="info-steps">
-            <li>
-              <strong>1. Registro:</strong> Tu solicitud se guarda de inmediato en la base de datos MongoDB con estado inicial.
-            </li>
-            <li>
-              <strong>2. Encolado:</strong> Se envía un identificador a la cola Redis (<code>cola:solicitudes</code>).
-            </li>
-            <li>
-              <strong>3. Procesamiento Asíncrono:</strong> El Worker Node.js consume la cola, cambia el estado a <code>PROCESANDO</code> y evalúa las reglas.
-            </li>
-            <li>
-              <strong>4. Respuesta Automática:</strong> Se genera la respuesta basada en la categoría seleccionada y pasa a <code>RESPONDIDA</code>.
-            </li>
-          </ul>
+      <!-- Ayuda lateral -->
+      <aside class="side-info">
+        <div class="info-box">
+          <h4 class="info-title">💡 Proceso de Atención</h4>
+          <p class="info-text">
+            Al enviar tu solicitud, el sistema la guarda en <strong>MongoDB</strong> y envía su referencia a una cola en <strong>Redis</strong>.
+          </p>
+          <p class="info-text" style="margin-top: 8px;">
+            Un <strong>Worker independiente</strong> consume la cola, evalúa la categoría y responde automáticamente sin bloquear el sistema.
+          </p>
         </div>
 
-        <div class="categories-card">
-          <h4>Categorías sugeridas</h4>
-          <div class="category-item">
-            <span class="badge-cat">Información</span>
-            <p>Horarios, requisitos generales y canales de atención.</p>
-          </div>
-          <div class="category-item">
-            <span class="badge-cat">Soporte</span>
-            <p>Problemas de acceso o incidencias técnicas.</p>
-          </div>
-          <div class="category-item">
-            <span class="badge-cat">Documento</span>
-            <p>Solicitudes de certificados y constancias.</p>
-          </div>
-          <div class="category-item">
-            <span class="badge-cat">Consulta</span>
-            <p>Verificación de trámites en curso.</p>
-          </div>
-          <div class="category-item">
-            <span class="badge-cat">Actualización</span>
-            <p>Modificación o actualización de datos personales.</p>
-          </div>
+        <div class="info-box">
+          <h4 class="info-title">Categorías Oficiales</h4>
+          <ul class="cat-list">
+            <li><strong>Información:</strong> Horarios y canales de atención.</li>
+            <li><strong>Soporte:</strong> Problemas de acceso o técnicos.</li>
+            <li><strong>Documento:</strong> Certificados y constancias.</li>
+            <li><strong>Consulta:</strong> Estado de trámites en curso.</li>
+            <li><strong>Actualización:</strong> Modificación de datos personales.</li>
+          </ul>
         </div>
-      </div>
+      </aside>
     </div>
   </div>
 </template>
 
 <style scoped>
-.new-request-page {
+.new-req-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  max-width: 1100px;
+  gap: 20px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-.page-top-bar {
+.page-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 14px;
 }
 
-.page-heading {
-  font-size: 1.5rem;
-  font-weight: 700;
+.page-title {
+  font-size: 1.45rem;
+  font-weight: 800;
   color: #0f172a;
 }
 
-.page-subheading {
-  font-size: 0.88rem;
+.page-sub {
+  font-size: 0.84rem;
   color: #64748b;
   margin-top: 2px;
 }
 
 .btn-back {
-  background: white;
-  color: #475569;
+  background: #ffffff;
   border: 1px solid #cbd5e1;
-  padding: 8px 16px;
+  color: #334155;
+  padding: 8px 14px;
   border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: 0.86rem;
+  font-weight: 600;
   text-decoration: none;
   transition: all 0.15s;
 }
 .btn-back:hover {
   background: #f8fafc;
-  color: #0f172a;
 }
 
-.content-grid {
+.grid-content {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 24px;
   align-items: start;
 }
 
-.info-column {
+.side-info {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
-.info-card,
-.categories-card {
-  background: white;
+.info-box {
+  background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
-  padding: 22px;
+  padding: 20px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.info-card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.info-icon {
-  font-size: 1.3rem;
-}
-
-.info-card-header h4,
-.categories-card h4 {
-  font-size: 1rem;
+.info-title {
+  font-size: 0.95rem;
   font-weight: 700;
   color: #0f172a;
+  margin-bottom: 10px;
 }
 
-.info-steps {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.info-text {
   font-size: 0.84rem;
   color: #475569;
   line-height: 1.5;
 }
 
-.info-steps code {
-  background: #f1f5f9;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: monospace;
+.cat-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #475569;
 }
 
-.category-item {
-  margin-top: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #f1f5f9;
-}
-.category-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.badge-cat {
-  display: inline-block;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 0.76rem;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-  margin-bottom: 4px;
-}
-
-.category-item p {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-@media (max-width: 900px) {
-  .content-grid {
+@media (max-width: 860px) {
+  .grid-content {
     grid-template-columns: 1fr;
   }
 }

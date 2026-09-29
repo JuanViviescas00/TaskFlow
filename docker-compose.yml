@@ -46,7 +46,7 @@ services:
       PORT: "3000"
       MONGODB_URI: mongodb://mongoserver:27017/taskflow
       REDIS_URL: redis://redisserver:6379
-      CORS_ORIGIN: "http://localhost:8080,http://127.0.0.1:8080"
+      CORS_ORIGIN: "http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
     ports:
       - "3001:3000"                   # Anfitrión 3001 → contenedor 3000
     depends_on:

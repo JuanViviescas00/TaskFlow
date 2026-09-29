@@ -1,7 +1,5 @@
 <script setup>
-// Barra lateral de navegación con soporte responsive (doc §3.2, §10, HU-14)
-import { socket } from '../../plugins/socket'
-
+// Barra lateral moderna y profesional de TASKFLOW
 defineProps({
   isOpen: {
     type: Boolean,
@@ -22,7 +20,7 @@ function closeSidebar() {
 
 <template>
   <div>
-    <!-- Overlay móvil para cerrar al hacer clic afuera -->
+    <!-- Overlay para móvil -->
     <div
       v-if="isOpen"
       class="sidebar-backdrop"
@@ -30,13 +28,14 @@ function closeSidebar() {
     ></div>
 
     <aside class="sidebar" :class="{ 'sidebar-open': isOpen }">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <div class="logo-icon">⚡</div>
-          <div>
-            <h1>TASKFLOW</h1>
-            <p>Gestión de Solicitudes</p>
-          </div>
+      <!-- Logo de la marca -->
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <span>⚡</span>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">TASKFLOW</span>
+          <span class="brand-tag">Gestión de Solicitudes</span>
         </div>
         <button
           type="button"
@@ -48,31 +47,40 @@ function closeSidebar() {
         </button>
       </div>
 
+      <!-- Menú de Navegación -->
       <nav class="sidebar-nav">
-        <RouterLink to="/dashboard" @click="closeSidebar">
-          <span class="nav-icon">📊</span>
-          <span>Dashboard</span>
+        <span class="nav-heading">MENÚ PRINCIPAL</span>
+
+        <RouterLink to="/dashboard" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">📊</span>
+          <span class="link-text">Dashboard</span>
         </RouterLink>
-        <RouterLink to="/solicitudes" @click="closeSidebar">
-          <span class="nav-icon">📋</span>
-          <span>Solicitudes</span>
+
+        <RouterLink to="/solicitudes" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">📋</span>
+          <span class="link-text">Solicitudes</span>
         </RouterLink>
-        <RouterLink to="/solicitudes/nueva" @click="closeSidebar">
-          <span class="nav-icon">➕</span>
-          <span>Nueva solicitud</span>
+
+        <RouterLink to="/solicitudes/nueva" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">➕</span>
+          <span class="link-text">Nueva Solicitud</span>
         </RouterLink>
-        <RouterLink to="/monitor" @click="closeSidebar">
-          <span class="nav-icon">🖥️</span>
-          <span>Monitor</span>
+
+        <span class="nav-heading" style="margin-top: 14px;">INFRAESTRUCTURA</span>
+
+        <RouterLink to="/monitor" class="nav-link" @click="closeSidebar">
+          <span class="link-icon">🖥️</span>
+          <span class="link-text">Monitor & Worker</span>
         </RouterLink>
       </nav>
 
+      <!-- Pie de barra con estado del Socket -->
       <div class="sidebar-footer">
-        <div class="connection-status">
-          <span class="punto" :class="connected ? 'verde' : 'rojo'"></span>
-          <span>{{ connected ? 'Socket en línea' : 'Sin conexión socket' }}</span>
+        <div class="socket-status" :class="connected ? 'online' : 'offline'">
+          <span class="status-dot"></span>
+          <span>{{ connected ? 'Socket en línea' : 'Desconectado' }}</span>
         </div>
-        <div class="version-tag">v1.0.0 • Full Stack</div>
+        <span class="footer-version">v1.0.0 • Full Stack SENA</span>
       </div>
     </aside>
   </div>
@@ -89,162 +97,163 @@ function closeSidebar() {
 }
 
 .sidebar {
-  width: 250px;
-  background: #0f172a;
-  color: #e2e8f0;
+  width: 240px;
+  background: #0f172a; /* Slate 900 elegante de herramientas como Linear / Vercel */
+  color: #f8fafc;
   display: flex;
   flex-direction: column;
-  padding: 24px 16px;
-  gap: 28px;
+  padding: 20px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
-  border-right: 1px solid #1e293b;
   z-index: 1000;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-right: 1px solid #1e293b;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.sidebar-logo {
+.sidebar-brand {
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 6px 8px 18px 8px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 16px;
 }
 
-.logo-icon {
+.brand-icon {
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #38bdf8);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  color: white;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  font-size: 1.15rem;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
 }
 
-.sidebar-logo h1 {
-  font-size: 1.2rem;
+.brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-name {
+  font-size: 1.05rem;
+  font-weight: 800;
   letter-spacing: 0.5px;
   color: #ffffff;
-  font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
-.sidebar-logo p {
-  font-size: 0.72rem;
+.brand-tag {
+  font-size: 0.7rem;
   color: #94a3b8;
+  font-weight: 500;
 }
 
 .btn-close-mobile {
   display: none;
+  margin-left: auto;
   background: transparent;
   border: none;
   color: #94a3b8;
   font-size: 1.2rem;
   cursor: pointer;
-  padding: 4px;
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1;
 }
 
-.sidebar-nav a {
-  color: #94a3b8;
-  text-decoration: none;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.92rem;
-  font-weight: 500;
+.nav-heading {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.8px;
+  padding: 8px 12px 4px 12px;
+}
+
+.nav-link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
   transition: all 0.15s ease;
 }
 
-.sidebar-nav a:hover {
+.nav-link:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #f8fafc;
+  color: #ffffff;
 }
 
-.sidebar-nav a.router-link-active {
+.nav-link.router-link-active {
   background: #2563eb;
   color: #ffffff;
+  font-weight: 600;
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
-.nav-icon {
-  font-size: 1.1rem;
+.link-icon {
+  font-size: 1.05rem;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding-top: 16px;
+  padding-top: 14px;
   border-top: 1px solid #1e293b;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  padding-left: 6px;
 }
 
-.connection-status {
-  font-size: 0.78rem;
+.socket-status {
   display: flex;
   align-items: center;
-  gap: 8px;
-  color: #cbd5e1;
+  gap: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
-.punto {
-  width: 8px;
-  height: 8px;
+.socket-status.online { color: #4ade80; }
+.socket-status.offline { color: #f87171; }
+
+.status-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  display: inline-block;
 }
-
-.punto.verde {
+.socket-status.online .status-dot {
   background: #22c55e;
-  box-shadow: 0 0 8px #22c55e;
+  box-shadow: 0 0 6px #22c55e;
 }
-
-.punto.rojo {
+.socket-status.offline .status-dot {
   background: #ef4444;
-  box-shadow: 0 0 8px #ef4444;
 }
 
-.version-tag {
+.footer-version {
   font-size: 0.68rem;
   color: #64748b;
 }
 
-/* Responsive Móvil */
 @media (max-width: 900px) {
-  .sidebar-backdrop {
-    display: block;
-  }
-
-  .btn-close-mobile {
-    display: block;
-  }
-
+  .sidebar-backdrop { display: block; }
+  .btn-close-mobile { display: block; }
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    height: 100vh;
     transform: translateX(-100%);
-    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.3);
+    box-shadow: 10px 0 25px rgba(0, 0, 0, 0.3);
   }
-
   .sidebar.sidebar-open {
     transform: translateX(0);
   }

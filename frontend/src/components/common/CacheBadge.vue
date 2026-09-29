@@ -10,11 +10,22 @@ defineProps({
     type: Boolean,
     default: true,
   },
+  clickable: {
+    type: Boolean,
+    default: true,
+  },
 })
+
+defineEmits(['click'])
 </script>
 
 <template>
-  <div class="cache-badge" :class="cache === 'HIT' ? 'hit' : 'miss'">
+  <div
+    class="cache-badge"
+    :class="[cache === 'HIT' ? 'hit' : 'miss', { 'is-clickable': clickable }]"
+    :title="clickable ? 'Haz clic para inspeccionar y probar la caché' : ''"
+    @click="$emit('click', $event)"
+  >
     <span class="cache-icon">{{ cache === 'HIT' ? '⚡' : '💾' }}</span>
     <span class="cache-text">
       <strong>{{ cache === 'HIT' ? 'CACHE HIT' : 'CACHE MISS' }}</strong>
@@ -22,6 +33,7 @@ defineProps({
         ({{ cache === 'HIT' ? 'Redis' : 'MongoDB' }})
       </span>
     </span>
+    <span v-if="clickable" class="badge-hint">🔍</span>
   </div>
 </template>
 
@@ -49,6 +61,22 @@ defineProps({
   background: #f8fafc;
   color: #475569;
   border: 1px solid #cbd5e1;
+}
+
+.cache-badge.is-clickable {
+  cursor: pointer;
+}
+
+.cache-badge.is-clickable:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.96);
+  box-shadow: 0 3px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.badge-hint {
+  font-size: 0.72rem;
+  opacity: 0.6;
+  margin-left: 2px;
 }
 
 .cache-icon {

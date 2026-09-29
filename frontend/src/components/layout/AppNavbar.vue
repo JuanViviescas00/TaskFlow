@@ -1,10 +1,10 @@
 <script setup>
-// Barra de navegación superior con menú responsive (doc §3.2, §10, HU-14)
+// Barra superior moderna y limpia (Navbar)
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useRequestStore } from '../../store/requestStore'
 
-const props = defineProps({
+defineProps({
   connected: {
     type: Boolean,
     default: false,
@@ -18,15 +18,15 @@ const store = useRequestStore()
 const pageTitle = computed(() => {
   switch (route.name) {
     case 'dashboard':
-      return 'Dashboard Principal'
+      return 'Dashboard'
     case 'solicitudes':
       return 'Gestión de Solicitudes'
     case 'solicitud-nueva':
-      return 'Registro de Solicitud'
+      return 'Nueva Solicitud'
     case 'solicitud-detalle':
       return 'Detalle de Solicitud'
     case 'monitor':
-      return 'Monitor de Servicios'
+      return 'Monitor del Sistema'
     default:
       return 'TASKFLOW'
   }
@@ -38,35 +38,37 @@ const pageTitle = computed(() => {
     <div class="navbar-left">
       <button
         type="button"
-        class="menu-btn"
+        class="btn-hamburger"
         @click="emit('toggle-sidebar')"
-        aria-label="Abrir menú de navegación"
+        aria-label="Abrir menú"
       >
-        <span class="hamburger-icon">☰</span>
+        <span>☰</span>
       </button>
-      <div class="navbar-title-container">
-        <h2 class="navbar-title">{{ pageTitle }}</h2>
-      </div>
+
+      <h1 class="header-title">{{ pageTitle }}</h1>
     </div>
 
     <div class="navbar-right">
-      <div v-if="store.hayActividad" class="active-badge" title="Worker procesando solicitudes en segundo plano">
+      <!-- Indicador activo de worker -->
+      <div v-if="store.hayActividad" class="active-badge" title="Worker procesando cola Redis">
         <span class="pulse-dot"></span>
         <span class="activity-text">Worker activo</span>
       </div>
 
-      <div class="quick-status">
-        <span class="punto-mini" :class="connected ? 'verde' : 'rojo'"></span>
-        <span class="socket-label">{{ connected ? 'En línea' : 'Desconectado' }}</span>
+      <!-- Conexión Socket -->
+      <div class="connection-badge" :class="connected ? 'connected' : 'disconnected'">
+        <span class="conn-dot"></span>
+        <span class="conn-text">{{ connected ? 'En línea' : 'Desconectado' }}</span>
       </div>
 
+      <!-- Botón de acción rápida -->
       <RouterLink
         v-if="route.path !== '/solicitudes/nueva'"
         to="/solicitudes/nueva"
-        class="btn-new-req"
+        class="btn-add"
       >
-        <span class="plus-icon">+</span>
-        <span class="btn-text">Nueva solicitud</span>
+        <span>+</span>
+        <span class="btn-text">Nueva Solicitud</span>
       </RouterLink>
     </div>
   </header>
@@ -74,7 +76,7 @@ const pageTitle = computed(() => {
 
 <style scoped>
 .navbar {
-  height: 64px;
+  height: 60px;
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
@@ -89,38 +91,33 @@ const pageTitle = computed(() => {
 .navbar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
-.menu-btn {
+.btn-hamburger {
   display: none;
   background: transparent;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   align-items: center;
   justify-content: center;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   color: #334155;
   cursor: pointer;
-  transition: background 0.15s;
 }
 
-.menu-btn:hover {
-  background: #f1f5f9;
-}
-
-.navbar-title {
-  font-size: 1.15rem;
-  font-weight: 600;
+.header-title {
+  font-size: 1.1rem;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .navbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .active-badge {
@@ -131,14 +128,14 @@ const pageTitle = computed(() => {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 20px;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: #1d4ed8;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .pulse-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #2563eb;
   animation: pulse 1.5s infinite;
@@ -146,68 +143,68 @@ const pageTitle = computed(() => {
 
 @keyframes pulse {
   0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.7); }
-  70% { transform: scale(1.1); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+  70% { transform: scale(1.15); box-shadow: 0 0 0 5px rgba(37, 99, 235, 0); }
   100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 
-.quick-status {
+.connection-badge {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8rem;
-  color: #64748b;
-  background: #f8fafc;
   padding: 4px 10px;
   border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
 }
 
-.punto-mini {
+.connection-badge.connected {
+  color: #15803d;
+}
+.connection-badge.disconnected {
+  color: #b91c1c;
+}
+
+.conn-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
 }
-.punto-mini.verde { background: #22c55e; }
-.punto-mini.rojo { background: #ef4444; }
+.connection-badge.connected .conn-dot {
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+}
+.connection-badge.disconnected .conn-dot {
+  background: #ef4444;
+}
 
-.btn-new-req {
+.btn-add {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   background: #2563eb;
-  color: white;
+  color: #ffffff;
   text-decoration: none;
-  font-size: 0.85rem;
-  font-weight: 500;
-  padding: 8px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 7px 14px;
   border-radius: 8px;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.2);
 }
 
-.btn-new-req:hover {
+.btn-add:hover {
   background: #1d4ed8;
-  box-shadow: 0 4px 8px rgba(37, 99, 235, 0.3);
 }
 
 @media (max-width: 900px) {
-  .menu-btn {
-    display: inline-flex;
-  }
-  .navbar {
-    padding: 0 16px;
-  }
+  .btn-hamburger { display: inline-flex; }
+  .navbar { padding: 0 16px; }
 }
 
 @media (max-width: 600px) {
-  .btn-text, .socket-label, .activity-text {
-    display: none;
-  }
-  .quick-status {
-    padding: 6px;
-  }
-  .navbar-title {
-    font-size: 1rem;
-  }
+  .btn-text, .activity-text { display: none; }
+  .btn-add { padding: 7px 10px; }
 }
 </style>
