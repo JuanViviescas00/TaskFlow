@@ -41,11 +41,9 @@ services:
         condition: service_healthy
     networks: [taskflow]
 
-  # Worker independiente (doc regla 6): imagen propia, sin exposición HTTP
+  # Worker independiente (doc regla 6): servicio propio aislado en /worker, sin exposición HTTP
   worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.worker
+    build: ./worker
     container_name: taskflow-worker
     environment:
       # ⚠️  Reemplaza con tu connection string de MongoDB Atlas
