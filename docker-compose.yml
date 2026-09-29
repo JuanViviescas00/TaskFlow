@@ -1,32 +1,18 @@
 # TASKFLOW — Docker Compose (doc §9-§11, §19, HU-13)
 #
-# Servicios del documento:
-#   frontend | backend | worker | mongoserver | redisserver
+# Servicios:
+#   frontend | backend | worker | redisserver
+#   (MongoDB -> MongoDB Atlas, nube, sin contenedor local)
 #
-# Comunicación por NOMBRES DE SERVICIO, nunca localhost (doc §10):
-#   backend → mongoserver:27017 | redisserver:6379
-#   worker  → mongoserver:27017 | redisserver:6379 | backend:3000
+# Comunicación por NOMBRES DE SERVICIO (doc §10):
+#   backend → redisserver:6379
+#   worker  → redisserver:6379 | backend:3000
 #
-# Puertos publicados (diferentes a los internos, doc §10) — documentados en backend/README.md:
+# Puertos publicados — documentados en backend/README.md:
 #   frontend: 8080 → 80      backend: 3001 → 3000
-#   mongoserver: 27018 → 27017    redisserver: 6380 → 6379
+#   redisserver: 6380 → 6379
 
 services:
-  mongoserver:
-    image: mongo:7
-    container_name: taskflow-mongoserver
-    volumes:
-      - mongo-data:/data/db           # Persistencia (doc §11, regla 8)
-    ports:
-      - "27018:27017"                 # Anfitrión 27018 → contenedor 27017
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks: [taskflow]
-
   redisserver:
     image: redis:7-alpine
     container_name: taskflow-redisserver
@@ -44,14 +30,13 @@ services:
     container_name: taskflow-backend
     environment:
       PORT: "3000"
-      MONGODB_URI: mongodb://mongoserver:27017/taskflow
+      # ⚠️  Reemplaza con tu connection string de MongoDB Atlas
+      MONGODB_URI: ${MONGODB_URI}
       REDIS_URL: redis://redisserver:6379
       CORS_ORIGIN: "http://localhost:8080,http://127.0.0.1:8080"
     ports:
       - "3001:3000"                   # Anfitrión 3001 → contenedor 3000
     depends_on:
-      mongoserver:
-        condition: service_healthy
       redisserver:
         condition: service_healthy
     networks: [taskflow]
@@ -63,18 +48,16 @@ services:
       dockerfile: Dockerfile.worker
     container_name: taskflow-worker
     environment:
-      MONGODB_URI: mongodb://mongoserver:27017/taskflow
+      # ⚠️  Reemplaza con tu connection string de MongoDB Atlas
+      MONGODB_URI: ${MONGODB_URI}
       REDIS_URL: redis://redisserver:6379
       BACKEND_URL_PARA_WORKER: http://backend:3000
       WORKER_INTERVALO_MS: "500"
     depends_on:
-      mongoserver:
-        condition: service_healthy
       redisserver:
         condition: service_healthy
       backend:
         condition: service_started
-    # El worker no sirve HTTP; desactivar el healthcheck heredado de la imagen del backend
     healthcheck:
       disable: true
     networks: [taskflow]
@@ -88,9 +71,6 @@ services:
       backend:
         condition: service_started
     networks: [taskflow]
-
-volumes:
-  mongo-data:
 
 networks:
   taskflow:
