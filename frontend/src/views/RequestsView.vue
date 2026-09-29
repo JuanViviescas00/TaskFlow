@@ -1,361 +1,178 @@
 <script setup>
-// Vista de Solicitudes moderna y limpia con barra de filtros horizontal
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRequestStore } from '../store/requestStore'
+// Listado de solicitudes (doc §15.3): filtros avanzados, estados reactivos y operaciones
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { listarSolicitudes, eliminarSolicitud } from '../services/requestService'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from '../composables/useToast'
-import RequestTable from '../components/requests/RequestTable.vue'
-import CacheBadge from '../components/common/CacheBadge.vue'
-import CacheModal from '../components/common/CacheModal.vue'
-import { CATEGORIAS, ESTADOS, PRIORIDADES } from '../utils/format'
+import EstadoBadge from '../components/EstadoBadge.vue'
+import { formatDate, CATEGORIAS, ESTADOS, PRIORIDADES } from '../utils/format'
 
-const store = useRequestStore()
-const toast = useToast()
+const solicitudes = ref([])
+const total = ref(0)
+const cargando = ref(true)
+const error = ref('')
+const mensaje = ref('')
 
-const modalCacheVisible = ref(false)
-const debounceTimer = ref(null)
+const filtros = ref({ q: '', estado: '', categoria: '', prioridad: '' })
 
-// Suscripción reactiva con Socket.IO (HU-16)
 const eventos = {
-  'solicitud-creada': () => store.cargarSolicitudes(),
-  'solicitud-encolada': () => store.cargarSolicitudes(),
-  'solicitud-procesando': () => store.cargarSolicitudes(),
-  'solicitud-respondida': () => store.cargarSolicitudes(),
-  'solicitud-error': () => store.cargarSolicitudes(),
+  'solicitud-creada': recargar,
+  'solicitud-encolada': recargar,
+  'solicitud-procesando': recargar,
+  'solicitud-respondida': recargar,
+  'solicitud-error': recargar,
 }
 useSocket(eventos)
 
-function onFilterChange() {
-  clearTimeout(debounceTimer.value)
-  debounceTimer.value = setTimeout(() => {
-    store.cargarSolicitudes()
-  }, 250)
+let temporizador = null
+async function recargar() {
+  try {
+    const params = {}
+    for (const [k, v] of Object.entries(filtros.value)) {
+      if (v) params[k] = v
+    }
+    const data = await listarSolicitudes(params)
+    solicitudes.value = data.solicitudes
+    total.value = data.total
+    error.value = ''
+  } catch (e) {
+    error.value = 'Error al consultar las solicitudes con el backend.'
+  } finally {
+    cargando.value = false
+  }
+}
+
+watch(filtros, recargar, { deep: true })
+
+async function eliminar(s) {
+  mensaje.value = ''
+  if (!confirm(`¿Estás seguro de eliminar la solicitud "${s.titulo}"?`)) return
+  try {
+    await eliminarSolicitud(s.id)
+    mensaje.value = 'Solicitud eliminada correctamente.'
+    recargar()
+  } catch {
+    error.value = 'No se pudo eliminar la solicitud.'
+  }
 }
 
 function limpiarFiltros() {
-  store.filtros.q = ''
-  store.filtros.estado = ''
-  store.filtros.categoria = ''
-  store.filtros.prioridad = ''
-  store.cargarSolicitudes()
+  filtros.value = { q: '', estado: '', categoria: '', prioridad: '' }
 }
 
-async function eliminar(s) {
-  if (!confirm(`¿Estás seguro de eliminar la solicitud "${s.titulo}"?`)) return
-  try {
-    await store.remover(s.id)
-    toast.success(`Solicitud eliminada correctamente`, 'Operación exitosa')
-  } catch {
-    toast.error('No se pudo eliminar la solicitud.', 'Error')
-  }
-}
-
-let temporizador = null
 onMounted(() => {
-  store.cargarSolicitudes()
-  temporizador = setInterval(() => store.cargarSolicitudes(), 15000)
+  recargar()
+  temporizador = setInterval(recargar, 15000)
 })
-
-onUnmounted(() => {
-  if (temporizador) clearInterval(temporizador)
-  if (debounceTimer.value) clearTimeout(debounceTimer.value)
-})
+onUnmounted(() => clearInterval(temporizador))
 </script>
 
 <template>
-  <div class="requests-page">
-    <!-- Encabezado de la página -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">Solicitudes</h2>
-        <span class="count-tag">{{ store.total }} solicitudes</span>
+  <section class="vista">
+    <header class="vista-header">
+      <div>
+        <h2>Solicitudes</h2>
+        <p>{{ total }} solicitud(es) registrada(s) en el sistema</p>
       </div>
+      <RouterLink class="btn primario" to="/solicitudes/nueva">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Nueva solicitud
+      </RouterLink>
+    </header>
 
-      <div class="header-actions">
-        <!-- Indicador de Caché Redis vs MongoDB (HU-08) -->
-        <CacheBadge :cache="store.listCache" :clickable="true" @click="modalCacheVisible = true" />
-
-        <button
-          type="button"
-          class="btn-refresh"
-          title="Actualizar listado"
-          :disabled="store.cargando"
-          @click="store.cargarSolicitudes()"
-        >
-          <span :class="{ 'spin-icon': store.cargando }">🔄</span>
-          <span>Actualizar</span>
-        </button>
-
-        <RouterLink to="/solicitudes/nueva" class="btn-primary">
-          ➕ Nueva Solicitud
-        </RouterLink>
-      </div>
+    <div v-if="error" class="alerta error" role="alert">
+      <span>{{ error }}</span>
+    </div>
+    <div v-if="mensaje" class="alerta ok" role="status">
+      <span>{{ mensaje }}</span>
     </div>
 
-    <!-- Barra horizontal de filtros moderna -->
-    <div class="toolbar-card">
-      <div class="search-wrap">
-        <span class="search-ico">🔍</span>
-        <input
-          v-model="store.filtros.q"
-          type="search"
-          placeholder="Buscar por título o descripción..."
-          class="search-input"
-          @input="onFilterChange"
+    <!-- Barra de filtros del espacio XY -->
+    <div class="filtros">
+      <div class="filtro-busqueda-wrap">
+        <svg class="icono-busqueda" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input 
+          v-model="filtros.q" 
+          type="search" 
+          placeholder="Buscar por título o descripción..." 
+          aria-label="Buscar solicitudes"
         />
       </div>
 
-      <div class="filters-wrap">
-        <select
-          v-model="store.filtros.estado"
-          class="select-control"
-          @change="onFilterChange"
-        >
-          <option value="">Todos los estados</option>
-          <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
-        </select>
+      <select v-model="filtros.estado" aria-label="Filtrar por estado">
+        <option value="">Todos los estados</option>
+        <option v-for="e in ESTADOS" :key="e" :value="e">{{ e }}</option>
+      </select>
 
-        <select
-          v-model="store.filtros.categoria"
-          class="select-control"
-          @change="onFilterChange"
-        >
-          <option value="">Todas las categorías</option>
-          <option v-for="c in CATEGORIAS" :key="c" :value="c">{{ c }}</option>
-        </select>
+      <select v-model="filtros.categoria" aria-label="Filtrar por categoría">
+        <option value="">Todas las categorías</option>
+        <option v-for="c in CATEGORIAS" :key="c" :value="c">{{ c }}</option>
+      </select>
 
-        <select
-          v-model="store.filtros.prioridad"
-          class="select-control"
-          @change="onFilterChange"
-        >
-          <option value="">Todas las prioridades</option>
-          <option v-for="p in PRIORIDADES" :key="p" :value="p">{{ p }}</option>
-        </select>
+      <select v-model="filtros.prioridad" aria-label="Filtrar por prioridad">
+        <option value="">Todas las prioridades</option>
+        <option v-for="p in PRIORIDADES" :key="p" :value="p">{{ p }}</option>
+      </select>
+    </div>
 
-        <button
-          type="button"
-          class="btn-reset"
-          title="Restablecer filtros"
-          @click="limpiarFiltros"
-        >
-          Limpiar
-        </button>
+    <div v-if="cargando" class="cargando">
+      <span class="spinner"></span>
+      Cargando solicitudes...
+    </div>
+
+    <div v-else class="panel">
+      <div v-if="solicitudes.length === 0" class="vacio-box">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <p>No se encontraron solicitudes con los filtros aplicados.</p>
+        <button class="btn mini" @click="limpiarFiltros" style="margin-top: 10px;">Limpiar filtros de búsqueda</button>
+      </div>
+
+      <div v-else class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th style="width: 90px;">ID</th>
+              <th>Solicitud</th>
+              <th>Categoría</th>
+              <th>Prioridad</th>
+              <th>Estado</th>
+              <th>Fecha</th>
+              <th style="text-align: right; width: 140px;">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in solicitudes" :key="s.id">
+              <td class="mono">#{{ s.id.slice(-6) }}</td>
+              <td class="celda-destacada">{{ s.titulo }}</td>
+              <td>{{ s.categoria }}</td>
+              <td>
+                <span class="prioridad-pill" :class="s.prioridad.toLowerCase()">{{ s.prioridad }}</span>
+              </td>
+              <td><EstadoBadge :estado="s.estado" /></td>
+              <td class="texto-secundario">{{ formatDate(s.fechaCreacion) }}</td>
+              <td style="text-align: right;">
+                <div class="acciones-celda" style="justify-content: flex-end;">
+                  <RouterLink class="btn mini" :to="`/solicitudes/${s.id}`">Ver</RouterLink>
+                  <button class="btn mini peligro" @click="eliminar(s)" title="Eliminar solicitud">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
-
-    <div v-if="store.error" class="alerta error mb-4">
-      <span class="alerta-icono">⚠️</span>
-      <span>{{ store.error }}</span>
-    </div>
-
-    <!-- Tabla completa y espaciosa -->
-    <RequestTable
-      :solicitudes="store.solicitudes"
-      :loading="store.cargando"
-      @eliminar="eliminar"
-    />
-
-    <!-- Inspector Modal de Caché -->
-    <CacheModal
-      v-model:visible="modalCacheVisible"
-      :cache="store.listCache"
-      tipo="Listado de Solicitudes"
-      cacheKey="solicitudes:listado"
-      :onEjecutarPrueba="() => store.cargarSolicitudes()"
-    />
-  </div>
+  </section>
 </template>
-
-<style scoped>
-.requests-page {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title {
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.3px;
-}
-
-.count-tag {
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 0.78rem;
-  font-weight: 700;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.btn-refresh {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-refresh:hover:not(:disabled) {
-  background: #f8fafc;
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #2563eb;
-  color: #ffffff;
-  text-decoration: none;
-  font-size: 0.86rem;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
-  transition: all 0.15s;
-}
-.btn-primary:hover {
-  background: #1d4ed8;
-}
-
-/* Barra horizontal de herramientas */
-.toolbar-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 14px 18px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 240px;
-}
-
-.search-ico {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.9rem;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.search-input {
-  width: 100%;
-  padding: 8px 12px 8px 36px;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  background: #f8fafc;
-}
-
-.search-input:focus {
-  background: #ffffff;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-
-.filters-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.select-control {
-  padding: 8px 12px;
-  border: 1.5px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-  font-size: 0.86rem;
-  color: #334155;
-  outline: none;
-  cursor: pointer;
-}
-
-.select-control:focus {
-  border-color: #2563eb;
-}
-
-.btn-reset {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-reset:hover {
-  background: #e2e8f0;
-  color: #0f172a;
-}
-
-.mb-4 {
-  margin-bottom: 16px;
-}
-
-.spin-icon {
-  display: inline-block;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@media (max-width: 768px) {
-  .toolbar-card {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .filters-wrap {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-</style>

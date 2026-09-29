@@ -1,41 +1,31 @@
 <script setup>
-// Dashboard limpio y moderno de TASKFLOW
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRequestStore } from '../store/requestStore'
+// Dashboard profesional (doc §15.1): indicadores en tiempo real y flujo de procesamiento
+import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { obtenerEstadisticas, listarSolicitudes } from '../services/requestService'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from '../composables/useToast'
-import RequestTable from '../components/requests/RequestTable.vue'
-import CacheBadge from '../components/common/CacheBadge.vue'
-import CacheModal from '../components/common/CacheModal.vue'
+import StatCard from '../components/StatCard.vue'
+import EstadoBadge from '../components/EstadoBadge.vue'
+import { formatDate } from '../utils/format'
 
-const store = useRequestStore()
-const toast = useToast()
-
+const stats = ref({ total: 0, pendientes: 0, enCola: 0, procesando: 0, respondidas: 0, errores: 0 })
+const recientes = ref([])
 const cargando = ref(true)
 const error = ref('')
-const modalCacheVisible = ref(false)
 
 const eventos = {
-  'solicitud-creada': (s) => {
-    recargar()
-    toast.info(`Nueva solicitud: "${s.titulo}"`, 'Dashboard')
-  },
+  'solicitud-creada': () => recargar(),
   'solicitud-encolada': () => recargar(),
   'solicitud-procesando': () => recargar(),
-  'solicitud-respondida': (s) => {
-    recargar()
-    toast.success(`Solicitud #${s.id ? s.id.slice(-6) : ''} respondida`, 'Dashboard')
-  },
+  'solicitud-respondida': () => recargar(),
   'solicitud-error': () => recargar(),
 }
 useSocket(eventos)
 
 async function recargar() {
   try {
-    await Promise.all([
-      store.cargarEstadisticas(),
-      store.cargarSolicitudes({ limite: 5 }),
-    ])
+    const [statsData, lista] = await Promise.all([obtenerEstadisticas(), listarSolicitudes({ limite: 6 })])
+    stats.value = statsData
+    recientes.value = lista.solicitudes
     error.value = ''
   } catch (e) {
     error.value = 'No se pudo conectar con el backend (puerto 3001).'
@@ -44,309 +34,117 @@ async function recargar() {
   }
 }
 
+const hayActividad = computed(() => stats.value.enCola > 0 || stats.value.procesando > 0)
+
 let temporizador = null
 onMounted(() => {
   recargar()
   temporizador = setInterval(recargar, 10000)
 })
-
-onUnmounted(() => {
-  if (temporizador) clearInterval(temporizador)
-})
+onUnmounted(() => clearInterval(temporizador))
 </script>
 
 <template>
-  <div class="dashboard-container">
-    <!-- Encabezado -->
-    <div class="dash-header">
+  <section class="vista">
+    <header class="vista-header">
       <div>
-        <h2 class="dash-title">Panel de Control</h2>
-        <p class="dash-sub">Métricas en tiempo real y flujo de procesamiento</p>
+        <h2>Dashboard</h2>
+        <p>Visión general del sistema y flujo de solicitudes en tiempo real</p>
       </div>
+      <RouterLink class="btn primario" to="/solicitudes/nueva">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        Nueva solicitud
+      </RouterLink>
+    </header>
 
-      <div class="dash-actions">
-        <CacheBadge :cache="store.statsCache" :clickable="true" @click="modalCacheVisible = true" />
-        <RouterLink to="/solicitudes/nueva" class="btn-primary">
-          ➕ Nueva Solicitud
-        </RouterLink>
-      </div>
-    </div>
-
-    <div v-if="error" class="alerta error mb-4">
-      <span class="alerta-icono">⚠️</span>
+    <div v-if="error" class="alerta error" role="alert">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
       <span>{{ error }}</span>
     </div>
 
-    <!-- Banner si hay actividad de procesamiento -->
-    <div v-if="store.hayActividad" class="active-worker-card">
-      <span class="worker-pulse">⚡</span>
-      <div>
-        <strong>Worker Node.js en ejecución</strong>
-        <p>Procesando solicitudes asíncronamente desde la cola Redis. Los cambios se actualizan automáticamente.</p>
-      </div>
+    <div v-if="cargando" class="cargando">
+      <span class="spinner"></span>
+      Cargando indicadores del sistema...
     </div>
 
-    <!-- Tarjetas métricas modernas -->
-    <div class="kpi-grid">
-      <div class="kpi-card kpi-total">
-        <div class="kpi-header">
-          <span class="kpi-title">Total Solicitudes</span>
-          <span class="kpi-ico">📁</span>
-        </div>
-        <span class="kpi-val">{{ store.stats.total }}</span>
-        <span class="kpi-desc">Registradas en MongoDB</span>
+    <template v-else>
+      <div class="grid-stats">
+        <StatCard etiqueta="Total" :valor="stats.total" color="azul" />
+        <StatCard etiqueta="Pendientes" :valor="stats.pendientes" color="amarillo" />
+        <StatCard etiqueta="En cola" :valor="stats.enCola" color="azul" />
+        <StatCard etiqueta="Procesando" :valor="stats.procesando" color="morado" />
+        <StatCard etiqueta="Respondidas" :valor="stats.respondidas" color="verde" />
+        <StatCard etiqueta="Errores" :valor="stats.errores" color="rojo" />
       </div>
 
-      <div class="kpi-card kpi-queue">
-        <div class="kpi-header">
-          <span class="kpi-title">En Cola (Redis)</span>
-          <span class="kpi-ico">⏳</span>
-        </div>
-        <span class="kpi-val">{{ store.stats.enCola }}</span>
-        <span class="kpi-desc">Esperando turno</span>
+      <div v-if="hayActividad" class="alerta info" role="status">
+        <span class="badge-dot pulse" style="background-color: var(--color-info);"></span>
+        <span>Procesamiento activo en la cola Redis; las actualizaciones se sincronizan automáticamente vía WebSockets.</span>
       </div>
 
-      <div class="kpi-card kpi-process">
-        <div class="kpi-header">
-          <span class="kpi-title">En Proceso</span>
-          <span class="kpi-ico">⚙️</span>
+      <div class="panel">
+        <div class="panel-header">
+          <div>
+            <h3>Solicitudes recientes</h3>
+            <span class="subtexto-header">Últimas solicitudes ingresadas al flujo</span>
+          </div>
+          <RouterLink to="/solicitudes" class="link-accion">
+            Ver todas
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </RouterLink>
         </div>
-        <span class="kpi-val">{{ store.stats.procesando }}</span>
-        <span class="kpi-desc">Worker ejecutando</span>
-      </div>
 
-      <div class="kpi-card kpi-success">
-        <div class="kpi-header">
-          <span class="kpi-title">Respondidas</span>
-          <span class="kpi-ico">✓</span>
+        <div v-if="recientes.length === 0" class="vacio-box">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+          <p>Aún no hay solicitudes registradas en el sistema.</p>
+          <RouterLink to="/solicitudes/nueva" class="btn mini primario" style="margin-top: 10px;">Crear la primera solicitud</RouterLink>
         </div>
-        <span class="kpi-val">{{ store.stats.respondidas }}</span>
-        <span class="kpi-desc">Atendidas con éxito</span>
-      </div>
 
-      <div class="kpi-card kpi-error">
-        <div class="kpi-header">
-          <span class="kpi-title">Con Error</span>
-          <span class="kpi-ico">⚠️</span>
+        <div v-else class="tabla-contenedor">
+          <table class="tabla">
+            <thead>
+              <tr>
+                <th style="width: 100px;">ID</th>
+                <th>Solicitud</th>
+                <th>Categoría</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Fecha creación</th>
+                <th style="text-align: right;">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in recientes" :key="s.id">
+                <td class="mono">#{{ s.id.slice(-6) }}</td>
+                <td class="celda-destacada">{{ s.titulo }}</td>
+                <td>{{ s.categoria }}</td>
+                <td>
+                  <span class="prioridad-pill" :class="s.prioridad.toLowerCase()">{{ s.prioridad }}</span>
+                </td>
+                <td><EstadoBadge :estado="s.estado" /></td>
+                <td class="texto-secundario">{{ formatDate(s.fechaCreacion) }}</td>
+                <td style="text-align: right;">
+                  <RouterLink class="btn mini" :to="`/solicitudes/${s.id}`">Ver</RouterLink>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-        <span class="kpi-val">{{ store.stats.errores }}</span>
-        <span class="kpi-desc">Fallas controladas</span>
       </div>
-    </div>
-
-    <!-- Tabla de Solicitudes Recientes -->
-    <div class="recent-card">
-      <div class="recent-header">
-        <div>
-          <h3 class="recent-title">Solicitudes Recientes</h3>
-          <p class="recent-sub">Últimos requerimientos registrados en el sistema</p>
-        </div>
-        <RouterLink to="/solicitudes" class="link-all">
-          Ver todas las solicitudes →
-        </RouterLink>
-      </div>
-
-      <RequestTable
-        :solicitudes="store.solicitudes.slice(0, 5)"
-        :loading="cargando"
-        @eliminar="(s) => store.remover(s.id)"
-      />
-    </div>
-
-    <!-- Inspector Modal de Caché -->
-    <CacheModal
-      v-model:visible="modalCacheVisible"
-      :cache="store.statsCache"
-      tipo="Estadísticas Globales"
-      cacheKey="estadisticas:resumen"
-      :onEjecutarPrueba="() => store.cargarEstadisticas()"
-    />
-  </div>
+    </template>
+  </section>
 </template>
-
-<style scoped>
-.dashboard-container {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.dash-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.dash-title {
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: -0.3px;
-}
-
-.dash-sub {
-  font-size: 0.84rem;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.dash-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #2563eb;
-  color: #ffffff;
-  text-decoration: none;
-  font-size: 0.86rem;
-  font-weight: 600;
-  padding: 8px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.25);
-  transition: all 0.15s;
-}
-.btn-primary:hover {
-  background: #1d4ed8;
-}
-
-.active-worker-card {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 12px;
-  padding: 14px 18px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.worker-pulse {
-  font-size: 1.4rem;
-  color: #2563eb;
-}
-
-.active-worker-card strong {
-  color: #1e40af;
-  font-size: 0.9rem;
-}
-
-.active-worker-card p {
-  color: #3b82f6;
-  font-size: 0.8rem;
-  margin-top: 2px;
-}
-
-/* KPIs modernos */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.kpi-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.kpi-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
-}
-
-.kpi-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.kpi-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.kpi-ico {
-  font-size: 1.1rem;
-}
-
-.kpi-val {
-  font-size: 2rem;
-  font-weight: 800;
-  color: #0f172a;
-  line-height: 1.1;
-  margin-top: 4px;
-}
-
-.kpi-desc {
-  font-size: 0.72rem;
-  color: #94a3b8;
-}
-
-.kpi-total { border-top: 3px solid #2563eb; }
-.kpi-queue { border-top: 3px solid #0284c7; }
-.kpi-process { border-top: 3px solid #7c3aed; }
-.kpi-success { border-top: 3px solid #16a34a; }
-.kpi-error { border-top: 3px solid #dc2626; }
-
-/* Sección reciente */
-.recent-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.recent-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-}
-
-.recent-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.recent-sub {
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.link-all {
-  color: #2563eb;
-  font-size: 0.84rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-.link-all:hover {
-  text-decoration: underline;
-}
-
-.mb-4 {
-  margin-bottom: 16px;
-}
-</style>

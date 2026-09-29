@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const ESTADOS = {
   PENDIENTE: 'PENDIENTE',
@@ -11,7 +11,6 @@ const ESTADOS = {
 const ESTADOS_VALIDOS = Object.values(ESTADOS);
 const CATEGORIAS = ['Información', 'Soporte', 'Documento', 'Consulta', 'Actualización'];
 const PRIORIDADES = ['Baja', 'Media', 'Alta'];
-
 const COLA_SOLICITUDES = 'cola:solicitudes';
 
 const CACHE_PREFIX = {
@@ -31,6 +30,14 @@ const EVENTOS_SOCKET = {
   MONITOR_ACTUALIZADO: 'monitor-actualizado',
 };
 
+const EVENTOS_WORKER_A_BACKEND = [
+  EVENTOS_SOCKET.SOLICITUD_PROCESANDO,
+  EVENTOS_SOCKET.SOLICITUD_RESPONDIDA,
+  EVENTOS_SOCKET.SOLICITUD_ERROR,
+  EVENTOS_SOCKET.COLA_ACTUALIZADA,
+  EVENTOS_SOCKET.MONITOR_ACTUALIZADO,
+];
+
 module.exports = {
   ESTADOS,
   ESTADOS_VALIDOS,
@@ -39,4 +46,5 @@ module.exports = {
   COLA_SOLICITUDES,
   CACHE_PREFIX,
   EVENTOS_SOCKET,
+  EVENTOS_WORKER_A_BACKEND,
 };

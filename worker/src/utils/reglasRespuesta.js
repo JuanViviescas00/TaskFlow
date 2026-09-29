@@ -1,6 +1,5 @@
-﻿'use strict';
+'use strict';
 
-// Reglas de respuesta por categoría (doc §14 y taller §7)
 const REGLAS = {
   Información:
     'Gracias por su solicitud de información. Nuestro horario de atención es de lunes a viernes, ' +

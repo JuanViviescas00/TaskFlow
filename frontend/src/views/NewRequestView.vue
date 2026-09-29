@@ -1,204 +1,160 @@
 <script setup>
-// Pantalla de Nueva Solicitud limpia y moderna
+// Registro de nueva solicitud (doc §15.2): validación cliente-servidor y envío asíncrono
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useRequestStore } from '../store/requestStore'
-import { useToast } from '../composables/useToast'
-import RequestForm from '../components/requests/RequestForm.vue'
+import { crearSolicitud } from '../services/requestService'
+import { CATEGORIAS, PRIORIDADES, validarSolicitud } from '../utils/format'
 
 const router = useRouter()
-const store = useRequestStore()
-const toast = useToast()
 
-const formRef = ref(null)
-const loading = ref(false)
-const serverError = ref('')
-const serverSuccess = ref('')
+const form = ref({
+  titulo: '',
+  descripcion: '',
+  categoria: '',
+  prioridad: 'Media',
+})
+const errores = ref({})
+const enviando = ref(false)
+const exito = ref('')
+const errorGeneral = ref('')
 
-async function onSubmit(payload) {
-  loading.value = true
-  serverError.value = ''
-  serverSuccess.value = ''
+async function enviar() {
+  exito.value = ''
+  errorGeneral.value = ''
+  errores.value = validarSolicitud(form.value)
 
+  if (Object.keys(errores.value).length > 0) {
+    errorGeneral.value = 'Por favor completa correctamente los campos obligatorios.'
+    return
+  }
+
+  enviando.value = true
   try {
-    const respuesta = await store.registrar(payload)
-    const id = respuesta.solicitud?.id
-    const estado = respuesta.solicitud?.estado || 'EN_COLA'
-
-    serverSuccess.value = `¡Solicitud registrada con éxito! Estado: ${estado}. Ha ingresado a la cola Redis.`
-    toast.success(`Solicitud #${id ? id.slice(-6) : ''} creada correctamente`, 'Éxito')
-
-    if (formRef.value) {
-      formRef.value.resetForm()
-    }
-
-    setTimeout(() => {
-      router.push('/solicitudes')
-    }, 1500)
+    const respuesta = await crearSolicitud(form.value)
+    exito.value = `Solicitud registrada con éxito (estado ${respuesta.solicitud.estado}). Redirigiendo...`
+    form.value = { titulo: '', descripcion: '', categoria: '', prioridad: 'Media' }
+    errores.value = {}
+    setTimeout(() => router.push('/solicitudes'), 1500)
   } catch (e) {
     if (e.response?.data) {
       const { error, detalles } = e.response.data
-      serverError.value = error || 'Error al registrar la solicitud'
-      if (detalles && detalles.length > 0) {
-        serverError.value += ': ' + detalles.join(', ')
+      errorGeneral.value = error
+      errores.value = {}
+      for (const detalle of detalles || []) {
+        if (detalle.includes('título')) errores.value.titulo = detalle
+        else if (detalle.includes('descripción')) errores.value.descripcion = detalle
+        else if (detalle.includes('categoría')) errores.value.categoria = detalle
+        else errores.value.general = detalle
       }
     } else {
-      serverError.value = 'No se pudo conectar con el servidor backend.'
+      errorGeneral.value = 'No se pudo conectar con el servidor de la API.'
     }
-    toast.error(serverError.value, 'Error de Registro')
   } finally {
-    loading.value = false
+    enviando.value = false
   }
 }
 
-function onCancel() {
+function cancelar() {
   router.push('/solicitudes')
 }
 </script>
 
 <template>
-  <div class="new-req-container">
-    <div class="page-header">
+  <section class="vista estrecha">
+    <header class="vista-header">
       <div>
-        <h2 class="page-title">Nueva Solicitud</h2>
-        <p class="page-sub">Registra una petición para ser procesada asíncronamente por el Worker</p>
+        <div class="breadcrumb-nav">
+          <RouterLink to="/solicitudes" class="breadcrumb-link">Solicitudes</RouterLink>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current">Nueva</span>
+        </div>
+        <h2>Nueva solicitud</h2>
+        <p>Ingresa una solicitud al sistema para su procesamiento asíncrono</p>
       </div>
+      <button type="button" class="btn" @click="cancelar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Cancelar
+      </button>
+    </header>
 
-      <RouterLink to="/solicitudes" class="btn-back">
-        ← Volver al listado
-      </RouterLink>
+    <div v-if="errorGeneral" class="alerta error" role="alert">
+      <span>{{ errorGeneral }}</span>
+    </div>
+    <div v-if="exito" class="alerta ok" role="status">
+      <span>{{ exito }}</span>
     </div>
 
-    <div class="grid-content">
-      <!-- Formulario -->
-      <div class="form-wrapper">
-        <RequestForm
-          ref="formRef"
-          :loading="loading"
-          :server-error="serverError"
-          :server-success="serverSuccess"
-          @submit="onSubmit"
-          @cancel="onCancel"
+    <!-- Formulario estándar plano sin contenedor tipo card -->
+    <form class="formulario" @submit.prevent="enviar" novalidate>
+      <label>
+        <span class="label-texto">
+          Título de la solicitud
+          <span class="campo-requerido" title="Obligatorio">*</span>
+        </span>
+        <input
+          v-model="form.titulo"
+          type="text"
+          maxlength="120"
+          placeholder="Ej: Solicitud de certificado laboral"
+          :class="{ invalido: errores.titulo }"
+          aria-required="true"
         />
+        <span class="input-hint">Máximo 120 caracteres</span>
+        <small v-if="errores.titulo" class="error-texto">{{ errores.titulo }}</small>
+      </label>
+
+      <label>
+        <span class="label-texto">
+          Descripción detallada
+          <span class="campo-requerido" title="Obligatorio">*</span>
+        </span>
+        <textarea
+          v-model="form.descripcion"
+          rows="4"
+          maxlength="2000"
+          placeholder="Describe claramente los detalles, motivos o antecedentes..."
+          :class="{ invalido: errores.descripcion }"
+          aria-required="true"
+        ></textarea>
+        <span class="input-hint">Detalla la información necesaria para que el Worker genere la respuesta</span>
+        <small v-if="errores.descripcion" class="error-texto">{{ errores.descripcion }}</small>
+      </label>
+
+      <div class="fila">
+        <label>
+          <span class="label-texto">
+            Categoría
+            <span class="campo-requerido" title="Obligatorio">*</span>
+          </span>
+          <select v-model="form.categoria" :class="{ invalido: errores.categoria }" aria-required="true">
+            <option value="" disabled>Selecciona una categoría</option>
+            <option v-for="c in CATEGORIAS" :key="c" :value="c">{{ c }}</option>
+          </select>
+          <small v-if="errores.categoria" class="error-texto">{{ errores.categoria }}</small>
+        </label>
+
+        <label>
+          <span class="label-texto">
+            Nivel de Prioridad
+            <span class="campo-requerido" title="Obligatorio">*</span>
+          </span>
+          <select v-model="form.prioridad" :class="{ invalido: errores.prioridad }" aria-required="true">
+            <option v-for="p in PRIORIDADES" :key="p" :value="p">{{ p }}</option>
+          </select>
+          <small v-if="errores.prioridad" class="error-texto">{{ errores.prioridad }}</small>
+        </label>
       </div>
 
-      <!-- Ayuda lateral -->
-      <aside class="side-info">
-        <div class="info-box">
-          <h4 class="info-title">💡 Proceso de Atención</h4>
-          <p class="info-text">
-            Al enviar tu solicitud, el sistema la guarda en <strong>MongoDB</strong> y envía su referencia a una cola en <strong>Redis</strong>.
-          </p>
-          <p class="info-text" style="margin-top: 8px;">
-            Un <strong>Worker independiente</strong> consume la cola, evalúa la categoría y responde automáticamente sin bloquear el sistema.
-          </p>
-        </div>
-
-        <div class="info-box">
-          <h4 class="info-title">Categorías Oficiales</h4>
-          <ul class="cat-list">
-            <li><strong>Información:</strong> Horarios y canales de atención.</li>
-            <li><strong>Soporte:</strong> Problemas de acceso o técnicos.</li>
-            <li><strong>Documento:</strong> Certificados y constancias.</li>
-            <li><strong>Consulta:</strong> Estado de trámites en curso.</li>
-            <li><strong>Actualización:</strong> Modificación de datos personales.</li>
-          </ul>
-        </div>
-      </aside>
-    </div>
-  </div>
+      <div class="acciones">
+        <button type="button" class="btn" @click="cancelar">Descartar</button>
+        <button type="submit" class="btn primario" :disabled="enviando">
+          <span v-if="enviando" class="spinner" style="width: 14px; height: 14px; margin-right: 8px;"></span>
+          {{ enviando ? 'Registrando solicitud...' : 'Enviar solicitud' }}
+        </button>
+      </div>
+    </form>
+  </section>
 </template>
-
-<style scoped>
-.new-req-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.page-title {
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.page-sub {
-  font-size: 0.84rem;
-  color: #64748b;
-  margin-top: 2px;
-}
-
-.btn-back {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.86rem;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all 0.15s;
-}
-.btn-back:hover {
-  background: #f8fafc;
-}
-
-.grid-content {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-.side-info {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.info-box {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.info-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #0f172a;
-  margin-bottom: 10px;
-}
-
-.info-text {
-  font-size: 0.84rem;
-  color: #475569;
-  line-height: 1.5;
-}
-
-.cat-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 0.82rem;
-  color: #475569;
-}
-
-@media (max-width: 860px) {
-  .grid-content {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

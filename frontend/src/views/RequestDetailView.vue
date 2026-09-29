@@ -1,389 +1,180 @@
 <script setup>
-// Detalle de solicitud limpio y moderno
-import { ref, onMounted } from 'vue'
+// Detalle de solicitud (doc §15.4): datos completos, trazabilidad de estados y respuesta
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { useRequestStore } from '../store/requestStore'
+import { obtenerSolicitud } from '../services/requestService'
 import { useSocket } from '../composables/useSocket'
-import { useToast } from '../composables/useToast'
 import EstadoBadge from '../components/EstadoBadge.vue'
-import CacheBadge from '../components/common/CacheBadge.vue'
-import CacheModal from '../components/common/CacheModal.vue'
-import ResponsePanel from '../components/requests/ResponsePanel.vue'
 import { formatDate } from '../utils/format'
 
 const route = useRoute()
-const store = useRequestStore()
-const toast = useToast()
-
 const solicitud = ref(null)
-const cacheHeader = ref('MISS')
+const cache = ref('')
 const cargando = ref(true)
-const actualizandoCache = ref(false)
 const error = ref('')
-const modalCacheVisible = ref(false)
 
-async function cargarDetalle(mostrarSpinner = true) {
-  if (mostrarSpinner) cargando.value = true
-  else actualizandoCache.value = true
+async function cargar() {
   try {
-    const data = await store.cargarDetalle(route.params.id)
+    const { data, cache: cacheHeader } = await obtenerSolicitud(route.params.id)
+    if (!solicitud.value || solicitud.value.estado === data.estado) {
+      cache.value = cacheHeader
+    }
     solicitud.value = data
-    cacheHeader.value = store.detailCache
     error.value = ''
-    return { cache: cacheHeader.value }
   } catch (e) {
-    error.value = store.error || 'No se pudo cargar la solicitud.'
-    throw e
+    error.value = e.response?.status === 404
+      ? 'La solicitud especificada no existe o fue eliminada.'
+      : 'Error al consultar el detalle de la solicitud.'
   } finally {
-    if (mostrarSpinner) cargando.value = false
-    else actualizandoCache.value = false
+    cargando.value = false
   }
 }
 
-function abrirModalCache() {
-  modalCacheVisible.value = true
-}
-
-async function testearCache() {
-  abrirModalCache()
-}
-
 const eventos = {
-  'solicitud-procesando': (s) => {
-    if (s.id === route.params.id) {
-      solicitud.value = s
-      toast.warning('El Worker está procesando esta solicitud', 'En proceso')
-    }
-  },
-  'solicitud-respondida': (s) => {
-    if (s.id === route.params.id) {
-      solicitud.value = s
-      toast.success('¡Respuesta generada con éxito!', 'Respondida')
-    }
-  },
-  'solicitud-error': (s) => {
-    if (s.id === route.params.id) {
-      solicitud.value = s
-      toast.error('Ocurrió un error en el procesamiento', 'Error')
-    }
-  },
+  'solicitud-procesando': (s) => { if (s.id === solicitud.value?.id) solicitud.value = s },
+  'solicitud-respondida': (s) => { if (s.id === solicitud.value?.id) { solicitud.value = s; cache.value = '' } },
+  'solicitud-error': (s) => { if (s.id === solicitud.value?.id) solicitud.value = s },
 }
 useSocket(eventos)
 
-onMounted(cargarDetalle)
+onMounted(cargar)
+
+const pasosCiclo = ['PENDIENTE', 'EN_COLA', 'PROCESANDO', 'RESPONDIDA']
+
+function indicePaso(estado) {
+  if (estado === 'ERROR') return -1
+  return pasosCiclo.indexOf(estado)
+}
 </script>
 
 <template>
-  <div class="detail-container">
-    <div class="page-header">
+  <section class="vista estrecha">
+    <header class="vista-header">
       <div>
-        <div class="breadcrumb">
-          <RouterLink to="/solicitudes">Solicitudes</RouterLink>
-          <span>/</span>
-          <span>Detalle</span>
+        <div class="breadcrumb-nav">
+          <RouterLink to="/solicitudes" class="breadcrumb-link">Solicitudes</RouterLink>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current">Detalle</span>
         </div>
-        <h2 class="page-title">
-          Solicitud <span class="id-mono">#{{ route.params.id ? route.params.id.slice(-6) : '' }}</span>
-        </h2>
+        <h2>Detalle de solicitud</h2>
+        <p class="mono" v-if="solicitud">ID: {{ solicitud.id }}</p>
       </div>
+      <RouterLink class="btn" to="/solicitudes">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Volver al listado
+      </RouterLink>
+    </header>
 
-      <div class="header-actions">
-        <!-- Indicador de Caché Redis vs Mongo (HU-08) -->
-        <CacheBadge :cache="cacheHeader" :clickable="true" @click="abrirModalCache" />
-        <button
-          type="button"
-          class="btn-cache"
-          title="Abrir inspector para probar CACHE HIT / CACHE MISS"
-          :disabled="cargando || actualizandoCache"
-          @click="abrirModalCache"
-        >
-          <span :class="{ 'spin-icon': actualizandoCache }">⚡</span>
-          <span>Probar Caché</span>
-        </button>
-        <RouterLink to="/solicitudes" class="btn-back">
-          ← Volver
-        </RouterLink>
-      </div>
+    <div v-if="cargando" class="cargando">
+      <span class="spinner"></span>
+      Cargando detalle de la solicitud...
     </div>
-
-    <div v-if="cargando" class="loading-box">
-      <div class="spinner"></div>
-      <p>Consultando solicitud...</p>
-    </div>
-
-    <div v-else-if="error" class="alerta error">
-      <span class="alerta-icono">⚠️</span>
+    <div v-else-if="error" class="alerta error" role="alert">
       <span>{{ error }}</span>
     </div>
 
     <template v-else-if="solicitud">
-      <!-- Explicación pedagógica de la Caché (HU-08) -->
-      <div class="cache-callout" :class="cacheHeader === 'HIT' ? 'hit' : 'miss'">
-        <span class="callout-ico">{{ cacheHeader === 'HIT' ? '⚡' : '💾' }}</span>
-        <div>
-          <strong>Consulta atendida por: {{ cacheHeader === 'HIT' ? 'CACHE HIT (Redis)' : 'CACHE MISS (MongoDB)' }}</strong>
-          <p v-if="cacheHeader === 'HIT'">
-            Se recuperó inmediatamente de la memoria RAM de <strong>Redis</strong> sin realizar consultas lentas a MongoDB.
-          </p>
-          <p v-else>
-            La información se leyó de la base de datos persistente <strong>MongoDB</strong> y quedó almacenada temporalmente en Redis.
-          </p>
+      <!-- Barra de progreso del ciclo de vida en espacio XY -->
+      <div v-if="solicitud.estado !== 'ERROR'" class="timeline-ciclo" aria-label="Progreso del ciclo de vida">
+        <div 
+          v-for="(paso, idx) in pasosCiclo" 
+          :key="paso"
+          class="timeline-paso"
+          :class="{
+            'completado': indicePaso(solicitud.estado) > idx,
+            'actual': indicePaso(solicitud.estado) === idx
+          }"
+        >
+          <div class="paso-circulo">
+            <svg v-if="indicePaso(solicitud.estado) > idx" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span v-else>{{ idx + 1 }}</span>
+          </div>
+          <span class="paso-nombre">{{ paso.replace('_', ' ') }}</span>
         </div>
       </div>
 
-      <!-- Ficha de Datos -->
-      <div class="data-card">
-        <div class="card-header-row">
-          <div>
-            <h3 class="item-title">{{ solicitud.titulo }}</h3>
-            <span class="item-id">ID: <code>{{ solicitud.id }}</code></span>
-          </div>
-          <EstadoBadge :estado="solicitud.estado" />
-        </div>
-
-        <div class="fields-grid">
-          <div class="field-col">
-            <span class="lbl">Categoría</span>
-            <span class="val bold">{{ solicitud.categoria }}</span>
-          </div>
-          <div class="field-col">
-            <span class="lbl">Prioridad</span>
-            <span class="val">{{ solicitud.prioridad }}</span>
-          </div>
-          <div class="field-col">
-            <span class="lbl">Creada</span>
-            <span class="val">{{ formatDate(solicitud.fechaCreacion) }}</span>
-          </div>
-          <div class="field-col">
-            <span class="lbl">Procesada</span>
-            <span class="val">{{ solicitud.fechaProcesamiento ? formatDate(solicitud.fechaProcesamiento) : 'En espera' }}</span>
+      <!-- Ficha técnica estructurada -->
+      <div class="panel">
+        <div class="panel-header">
+          <h3>Información general</h3>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span v-if="cache" class="cache-badge" :class="cache.toLowerCase()">
+              {{ cache }}
+            </span>
+            <EstadoBadge :estado="solicitud.estado" />
           </div>
         </div>
 
-        <div class="desc-box">
-          <span class="lbl">Descripción</span>
-          <p class="desc-text">{{ solicitud.descripcion }}</p>
+        <div class="datos-grid">
+          <div class="fila-datos">
+            <span class="etiqueta">Título</span>
+            <span class="celda-destacada">{{ solicitud.titulo }}</span>
+          </div>
+
+          <div class="fila-datos">
+            <span class="etiqueta">Categoría</span>
+            <span>{{ solicitud.categoria }}</span>
+          </div>
+
+          <div class="fila-datos">
+            <span class="etiqueta">Prioridad</span>
+            <div>
+              <span class="prioridad-pill" :class="solicitud.prioridad.toLowerCase()">{{ solicitud.prioridad }}</span>
+            </div>
+          </div>
+
+          <div class="fila-datos">
+            <span class="etiqueta">Fecha registro</span>
+            <span class="texto-secundario">{{ formatDate(solicitud.fechaCreacion) }}</span>
+          </div>
+
+          <div class="fila-datos">
+            <span class="etiqueta">Descripción</span>
+            <p class="descripcion">{{ solicitud.descripcion }}</p>
+          </div>
         </div>
       </div>
 
-      <!-- Panel de Respuesta o Error -->
-      <ResponsePanel
-        :estado="solicitud.estado"
-        :respuesta="solicitud.respuesta"
-        :mensaje-error="solicitud.mensajeError"
-        :fecha-procesamiento="solicitud.fechaProcesamiento"
-      />
+      <!-- Respuesta generada por el Worker -->
+      <div v-if="solicitud.respuesta" class="panel respuesta-panel">
+        <div class="panel-header" style="background-color: var(--color-success-bg);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <h3 style="color: var(--color-success-text); margin: 0;">Respuesta oficial del sistema</h3>
+          </div>
+          <span v-if="solicitud.fechaProcesamiento" class="texto-secundario" style="font-size: 0.8rem;">
+            Procesado el {{ formatDate(solicitud.fechaProcesamiento) }}
+          </span>
+        </div>
+        <div style="padding: 16px 20px;">
+          <p class="descripcion" style="color: #0f172a; font-size: 0.94rem;">{{ solicitud.respuesta }}</p>
+        </div>
+      </div>
+
+      <!-- Diagnóstico de error si aplica -->
+      <div v-if="solicitud.mensajeError" class="panel error-panel-box">
+        <div class="panel-header" style="background-color: var(--color-danger-bg);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <h3 style="color: var(--color-danger-text); margin: 0;">Diagnóstico del error</h3>
+          </div>
+        </div>
+        <div style="padding: 16px 20px;">
+          <p style="color: var(--color-danger-text); font-size: 0.9rem;">{{ solicitud.mensajeError }}</p>
+        </div>
+      </div>
     </template>
-
-    <!-- Modal Inspector de Caché Redis & Mongo (HU-08) -->
-    <CacheModal
-      v-model:visible="modalCacheVisible"
-      :cache="cacheHeader"
-      tipo="Detalle de Solicitud"
-      :cacheKey="`solicitud:${route.params.id}`"
-      :onEjecutarPrueba="() => cargarDetalle(false)"
-    />
-  </div>
+  </section>
 </template>
-
-<style scoped>
-.detail-container {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: #64748b;
-  margin-bottom: 2px;
-}
-.breadcrumb a {
-  color: #2563eb;
-  text-decoration: none;
-}
-
-.page-title {
-  font-size: 1.45rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.id-mono {
-  color: #2563eb;
-  font-family: monospace;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.btn-cache {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #2563eb;
-  color: #ffffff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-cache:hover:not(:disabled) {
-  background: #1d4ed8;
-}
-
-.btn-back {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.84rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.cache-callout {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
-  border: 1px solid;
-  font-size: 0.85rem;
-}
-.cache-callout.hit {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #166534;
-}
-.cache-callout.miss {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #334155;
-}
-
-.callout-ico {
-  font-size: 1.3rem;
-  line-height: 1.2;
-}
-
-.data-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.card-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.item-title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.item-id {
-  font-size: 0.76rem;
-  color: #64748b;
-  margin-top: 2px;
-  display: block;
-}
-.item-id code {
-  font-family: monospace;
-  background: #f1f5f9;
-  padding: 2px 4px;
-  border-radius: 4px;
-}
-
-.fields-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-  padding: 16px 0;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.field-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.lbl {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.val {
-  font-size: 0.92rem;
-  color: #0f172a;
-}
-.val.bold { font-weight: 600; color: #2563eb; }
-
-.desc-box {
-  padding-top: 16px;
-}
-
-.desc-text {
-  margin-top: 6px;
-  font-size: 0.92rem;
-  color: #334155;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.loading-box {
-  padding: 40px;
-  text-align: center;
-  color: #64748b;
-}
-
-.spinner {
-  width: 30px;
-  height: 30px;
-  border: 3px solid #e2e8f0;
-  border-top-color: #2563eb;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 10px auto;
-}
-
-.spin-icon {
-  display: inline-block;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-</style>

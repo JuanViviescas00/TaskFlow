@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 require('dotenv').config();
 
@@ -7,7 +7,7 @@ const { crearClienteRedis } = require('./config/redis');
 const queue = require('./services/queue.service');
 const cache = require('./services/cache.service');
 const { io: ClientIO } = require('socket.io-client');
-const { EVENTOS_SOCKET, ESTADOS } = require('./utils/constantes');
+const { ESTADOS, EVENTOS_SOCKET } = require('./utils/constantes');
 const { generarRespuesta } = require('./utils/reglasRespuesta');
 const Solicitud = require('./models/Solicitud');
 const config = require('./config/env');
@@ -15,7 +15,6 @@ const config = require('./config/env');
 const backendUrl = config.backendUrlParaWorker;
 let socketBackend = null;
 
-// Conexión Socket.IO hacia el backend para notificaciones en vivo
 function conectarBackend() {
   socketBackend = ClientIO(backendUrl, {
     reconnection: true,
@@ -45,18 +44,6 @@ function notificar(evento, datos) {
   }
 }
 
-async function actualizarEstado(id, estado, camposExtra = {}) {
-  const solicitud = await Solicitud.findByIdAndUpdate(
-    id,
-    { estado, ...camposExtra },
-    { new: true }
-  );
-  if (solicitud) {
-    await cache.invalidarSolicitudes();
-  }
-  return solicitud;
-}
-
 async function procesarSolicitud(idSolicitud) {
   console.log(`[worker] Procesando solicitud ${idSolicitud}`);
 
@@ -71,51 +58,49 @@ async function procesarSolicitud(idSolicitud) {
   }
 
   // 1. Cambiar estado a PROCESANDO
-  const enProceso = await actualizarEstado(idSolicitud, ESTADOS.PROCESANDO);
-  notificar(EVENTOS_SOCKET.SOLICITUD_PROCESANDO, enProceso.toJSON());
+  solicitud.estado = ESTADOS.PROCESANDO;
+  await solicitud.save();
+  await cache.invalidarSolicitudes();
+  notificar(EVENTOS_SOCKET.SOLICITUD_PROCESANDO, solicitud.toJSON());
 
   try {
-    // Pausa pedagógica para que el cambio de estado se aprecie en vivo
+    // Retardo visual deliberado para que el cambio de estado se aprecie en la interfaz
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Simulación de error controlado para la Prueba Obligatoria #7 del taller
+    // Simulación de error controlado si contiene palabra clave [ERROR] (Prueba #7 del taller)
     if (
-      (solicitud.titulo && solicitud.titulo.toUpperCase().includes('[ERROR]')) ||
-      (solicitud.descripcion && solicitud.descripcion.toUpperCase().includes('[ERROR]'))
+      (solicitud.titulo && solicitud.titulo.includes('[ERROR]')) ||
+      (solicitud.descripcion && solicitud.descripcion.includes('[ERROR]'))
     ) {
-      throw new Error('Fallo provocado para demostración pedagógica (Prueba #7 del taller).');
+      throw new Error('Fallo simulado por palabra clave [ERROR] en la solicitud');
     }
 
-    // 2. Identificar categoría y generar respuesta según reglas
+    // 2. Generar respuesta por categoría
     const respuesta = generarRespuesta(solicitud.categoria);
 
-    // 3. Guardar en MongoDB y pasar a RESPONDIDA
-    const actualizada = await actualizarEstado(idSolicitud, ESTADOS.RESPONDIDA, {
-      respuesta,
-      fechaProcesamiento: new Date(),
-      mensajeError: null,
-    });
+    // 3. Guardar respuesta y pasar a RESPONDIDA
+    solicitud.estado = ESTADOS.RESPONDIDA;
+    solicitud.respuesta = respuesta;
+    solicitud.fechaProcesamiento = new Date();
+    solicitud.mensajeError = null;
+    await solicitud.save();
+    await cache.invalidarSolicitudes();
 
-    notificar(EVENTOS_SOCKET.SOLICITUD_RESPONDIDA, actualizada.toJSON());
-    console.log(`[worker] Solicitud ${idSolicitud} RESPONDIDA con éxito`);
+    notificar(EVENTOS_SOCKET.SOLICITUD_RESPONDIDA, solicitud.toJSON());
+    console.log(`[worker] Solicitud ${idSolicitud} RESPONDIDA exitosamente.`);
   } catch (err) {
-    console.error(`[worker] Error procesando ${idSolicitud}: ${err.message}`);
-    const conError = await actualizarEstado(idSolicitud, ESTADOS.ERROR, {
-      mensajeError: `No fue posible procesar la solicitud: ${err.message}`,
-      fechaProcesamiento: new Date(),
-    }).catch(() => null);
+    console.error(`[worker] Error al procesar solicitud ${idSolicitud}: ${err.message}`);
+    solicitud.estado = ESTADOS.ERROR;
+    solicitud.mensajeError = `Fallo en procesamiento: ${err.message}`;
+    await solicitud.save().catch(() => null);
+    await cache.invalidarSolicitudes().catch(() => null);
 
-    if (conError) {
-      notificar(EVENTOS_SOCKET.SOLICITUD_ERROR, conError.toJSON());
-    }
+    notificar(EVENTOS_SOCKET.SOLICITUD_ERROR, solicitud.toJSON());
   }
 }
 
 async function main() {
-  console.log('[worker] ==========================================');
   console.log('[worker] Iniciando TASKFLOW Worker independiente...');
-  console.log('[worker] ==========================================');
-
   await conectarMongo();
   const redis = crearClienteRedis('worker');
   await redis.ping();
@@ -124,14 +109,14 @@ async function main() {
   let apagando = false;
   let procesadas = 0;
 
-  // Latido para que el monitor detecte al Worker en línea
+  // Latido periódico cada 5s para que el Monitor lo muestre en línea (HU-09, HU-16)
   const latido = setInterval(() => {
     if (socketBackend && socketBackend.connected) {
       socketBackend.emit('worker:heartbeat');
     }
   }, 5000);
 
-  // Bucle de consumo continuo de la cola Redis
+  // Bucle principal de consumo de la cola
   while (!apagando) {
     try {
       const idSolicitud = await queue.desencolar(1);
@@ -146,13 +131,13 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, config.workerIntervaloMs));
       }
     } catch (err) {
-      console.error(`[worker] Error en el bucle principal: ${err.message}`);
+      console.error(`[worker] Error en bucle principal: ${err.message}`);
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 
-  async function apagar(señal) {
-    console.log(`\n[worker] Apagando (${señal})...`);
+  async function apagar(senal) {
+    console.log(`\n[worker] Apagando (${senal})...`);
     apagando = true;
     clearInterval(latido);
     await Promise.allSettled([
