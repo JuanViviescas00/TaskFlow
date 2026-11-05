@@ -1,12 +1,12 @@
 ﻿# TASKFLOW — Sistema de Gestión y Procesamiento Asíncrono de Solicitudes
 
-Proyecto Full Stack desarrollado para el programa **Tecnólogo en Análisis y Desarrollo de Software (ADSO) - SENA** (Ficha: 228118 / Taller Docker Compose).
+Proyecto Full Stack desarrollado para el programa **Tecnólogo en Análisis y Desarrollo de Software (ADSO) - SENA** (Ficha: 3139319 / Taller Docker Compose).
 
 ---
 
 ## 👥 Integrantes del Equipo
-- **Aprendiz 1:** [Nombre y Apellidos]
-- **Aprendiz 2:** [Nombre y Apellidos]
+- **Aprendiz 1:** Paula Valentina Rache Fonseca
+- **Aprendiz 2:** Juan Camilo Viviescas Triana
 
 ---
 
@@ -15,7 +15,7 @@ Proyecto Full Stack desarrollado para el programa **Tecnólogo en Análisis y De
 
 ---
 
-## 🏗️ Arquitectura Distribuida (Microservicios)
+##  Arquitectura Distribuida (Microservicios)
 
 ```text
                       ┌─────────────────────────┐
@@ -45,7 +45,7 @@ Proyecto Full Stack desarrollado para el programa **Tecnólogo en Análisis y De
 
 ---
 
-## 📁 Estructura del Proyecto en la Raíz
+##  Estructura del Proyecto en la Raíz
 
 ```text
 PROYECTO/
@@ -59,7 +59,7 @@ PROYECTO/
 
 ---
 
-## 🚀 Puesta en Marcha con Docker Compose
+##  Puesta en Marcha con Docker Compose
 
 El proyecto se ejecuta en un solo comando gracias a Docker Compose:
 
@@ -90,7 +90,7 @@ docker compose ps
 
 ---
 
-## 🧪 Guía para Demostración y Pruebas Obligatorias (Taller §17)
+##  Guía para Demostración y Pruebas Obligatorias (Taller §17)
 
 1. **Registro:** Ingresar a [http://localhost:8080/solicitudes/nueva](http://localhost:8080/solicitudes/nueva), registrar una solicitud y comprobar que aparece en el listado y se guarda en MongoDB.
 2. **Respuesta Automática:** Abrir la solicitud y verificar que el estado pasa de `EN COLA` → `PROCESANDO` → `RESPONDIDA` con la respuesta predefinida según la categoría.
