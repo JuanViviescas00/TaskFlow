@@ -1,7 +1,12 @@
 import { io } from 'socket.io-client'
 
 // Plugin Socket.IO (doc §21.4): conexión al backend con reconexión automática.
-const URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+// En desarrollo conecta a http://localhost:3001.
+// En producción, al omitir URL se conecta automáticamente al mismo origen del navegador.
+const defaultUrl = import.meta.env.PROD ? undefined : 'http://localhost:3001'
+const URL = import.meta.env.VITE_API_URL !== undefined
+  ? import.meta.env.VITE_API_URL
+  : defaultUrl
 
 const socket = io(URL, {
   reconnection: true,
