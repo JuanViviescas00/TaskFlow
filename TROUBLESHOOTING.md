@@ -67,20 +67,19 @@ Este documento mantiene la trazabilidad técnica de todos los problemas diagnost
 
 ---
 
-## 5. Preparación para Despliegue en Render (Contenedor Unificado con PM2)
-- **Fecha y Hora:** 2026-11-04 18:55:00 -05:00
-- **Descripción del Problema / Bug:** En el plan gratuito de Render, los Background Workers son de pago ($7/mes) y tener múltiples Web Services agota rápidamente la cuota de horas gratuitas.
-- **Causa Raíz:** Necesidad de desplegar el sistema completo (Frontend Vue + Backend Express + Worker consumidor de cola) en un único Web Service gratuito sin romper la separación de servicios en local exigida por el SENA.
+## 5. Preparación para Despliegue en Render (Contenedor All-in-One con Redis Interno)
+- **Fecha y Hora:** 2026-11-04 19:28:00 -05:00
+- **Descripción del Problema / Bug:** En el plan gratuito de Render, los Background Workers son de pago ($7/mes) y el servicio de Redis administrado expira a los 30 días; además, requerir servicios externos como Upstash añade complejidad de registro de cuentas.
+- **Causa Raíz:** Necesidad de desplegar el sistema completo (Frontend Vue + Backend Express + Worker + Redis Server) en un único Web Service gratuito de Render que sea 100% autosuficiente y permanente.
 - **Solución Aplicada:**
-  1. Se creó `Dockerfile` multi-stage en la raíz que compila el frontend de Vue, instala dependencias de backend y worker, y utiliza `pm2-runtime` para ejecutar `backend/src/server.js` y `worker/src/index.js` en paralelo en un solo contenedor.
-  2. Se creó `ecosystem.config.cjs` con límites de memoria y conexión Socket.IO local entre Worker y Backend (`http://127.0.0.1:${PORT}`).
+  1. Se instaló `redis` en Alpine dentro del `Dockerfile` multi-stage y se creó `docker-entrypoint.sh` para iniciar `redis-server --daemonize yes` en `127.0.0.1:6379` antes de arrancar los procesos de Node.js.
+  2. Se configuró `ecosystem.config.cjs` para ejecutar `backend/src/server.js` y `worker/src/index.js` en paralelo con PM2 en el mismo contenedor.
   3. Se configuró Express en `backend/src/app.js` para servir los estáticos compilados de `frontend/dist` en producción y soportar HTML5 History Mode de Vue Router.
-  4. Se habilitó soporte TLS (`rediss://` con `{ tls: { rejectUnauthorized: false } }`) en `backend/src/config/redis.js` y `worker/src/config/redis.js` para compatibilidad directa con Redis en la nube (ej. Upstash).
-  5. Se ajustaron `frontend/src/plugins/axios.js` y `frontend/src/plugins/socket.js` para usar origen relativo en producción, evitando problemas de CORS.
+  4. Backend y Worker se conectan a `redis://localhost:6379` localmente sin necesidad de configurar ninguna variable `REDIS_URL` en Render.
+  5. Se mantuvieron intactos `docker-compose.yml` y los entornos locales para las pruebas y sustentación del SENA.
 - **Archivos Modificados:**
-  - `Dockerfile`, `ecosystem.config.cjs`, `.dockerignore`, `render.yaml`
-  - `backend/src/app.js`, `backend/src/config/redis.js`
-  - `worker/src/config/redis.js`
+  - `Dockerfile`, `docker-entrypoint.sh`, `ecosystem.config.cjs`, `.dockerignore`, `render.yaml`
+  - `backend/src/app.js`, `backend/src/config/redis.js`, `worker/src/config/redis.js`
   - `frontend/src/plugins/axios.js`, `frontend/src/plugins/socket.js`
   - `TROUBLESHOOTING.md`
-- **Verificación:** Compilación exitosa de frontend con `npm run build` y validación de sintaxis de módulos con Node.js.
+- **Verificación:** Normalización de saltos de línea LF en entrypoint, compilación de frontend verificada y prueba de módulos de backend con Node.js.

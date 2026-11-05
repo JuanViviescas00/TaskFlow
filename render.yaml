@@ -1,6 +1,6 @@
 # ==============================================================================
 # TASKFLOW - Render Blueprint Specification (render.yaml)
-# Despliega TASKFLOW como un único Web Service gratuito en Render
+# Despliega TASKFLOW como un único Web Service gratuito en Render (con Redis interno)
 # ==============================================================================
 
 services:
@@ -16,8 +16,6 @@ services:
       - key: PORT
         value: 3000
       - key: MONGODB_URI
-        sync: false
-      - key: REDIS_URL
         sync: false
       - key: CORS_ORIGIN
         value: "*"
